@@ -7,3 +7,5 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 add_library(client_lib SHARED mynfs.cpp)
 add_executable(server server.cpp)
+add_executable(client_test client_test.cpp)
+target_link_libraries(client_test client_lib)
