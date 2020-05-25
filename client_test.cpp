@@ -4,8 +4,11 @@
 using namespace std;
 
 int main(int argc, char *argv[]) {
-	mynfs_connection conn;
-	if (mynfs_connect(&conn, "127.0.0.1", "adam", "hunter51") == -1) return -1;
+	mynfs_connection *conn;
+	if (mynfs_connect(&conn, "127.0.0.1", "adam", "hunter51") == -1) {
+		cout << "Got mynfs error: " << mynfs_error << endl;
+		return -1;
+	}
 	cout << "ok" << endl;
 	return 0;
 }

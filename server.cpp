@@ -3,6 +3,7 @@
 #include <sys/socket.h>
 #include <netinet/ip.h>
 #include <arpa/inet.h>
+#include <signal.h>
 #include <cstring>
 
 #include "packet.cpp"
@@ -16,7 +17,24 @@ void error(const char *msg, int code) {
 
 int handle_client(int sock);
 
+static bool running = true;
+void sig_handler(int sig) {
+	if (sig == SIGINT)
+		running = false;
+}
+
 int main(int argc, char* argv[]) {
+	// Handle Ctrl-C to properly stop server
+	struct sigaction new_act;
+	new_act.sa_handler = &sig_handler;
+	new_act.sa_flags = 0;
+	if (sigemptyset(&new_act.sa_mask) == -1)
+		error("sigemptyset error", 1);
+	if (sigaddset(&new_act.sa_mask, SIGINT) == -1)
+		error("sigaddset error", 1);
+	if (sigaction(SIGINT, &new_act, NULL) == -1)
+		error("Sigaction error", 1);
+
 	int sock = socket(AF_INET, SOCK_STREAM, 0);
 	if (sock == -1) {
 		error("Socket error", 1);
@@ -25,7 +43,6 @@ int main(int argc, char* argv[]) {
 	if (setsockopt(sock, 0, SO_REUSEADDR, &enable, sizeof(enable)) == -1) {
 		error("Socket option error", 1);
 	}
-
 
 	sockaddr_in addr;
 	memset(&addr, 0, sizeof(addr));
@@ -41,7 +58,7 @@ int main(int argc, char* argv[]) {
 		error("Listen error", 1);
 	}
 
-	while (true) {
+	while (running) {
 		cout << "listening..." << endl;
 
 		sockaddr_in peer_addr;
@@ -54,11 +71,16 @@ int main(int argc, char* argv[]) {
 			cout << "Connection from " << inet_ntoa(peer_addr.sin_addr)
 			<< ":" << ntohs(peer_addr.sin_port) << endl;
 		
-		handle_client(peer_sock);
+		if (handle_client(peer_sock) == -1) {
+			cout << "Error on handling client" << endl;
+		} else {
+			cout << "ok" << endl;
+		}
 
-		cout << "ok" << endl;
 		close(peer_sock);
 	}
+	cout << "Closing server..." << endl;
+	close(sock);
 	return 0;
 }
 
@@ -69,7 +91,8 @@ int handle_client(int sock) {
 		return -1;
 	}
 	if (packet.op != CONNECT) {
-		cout << "Not a connection packet: " << packet.op << endl;
+		cout << "Not a connection packet: " << packet.op << " 0x";
+		cout << hex << packet.op << dec << endl;
 		return -1;
 	}
 	cout << "Login: " << packet.args.connect.login;

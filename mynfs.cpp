@@ -6,14 +6,17 @@
 
 using namespace std;
 
-// struct mynfs_connection {
-//     int socket;
-// };
+struct mynfs_connection {
+    int socket;
+};
 
 const int OK = 0;
 const int ERROR = -1;
 
-int mynfs_connect(mynfs_connection* conn, const char *host, const char *login, const char *password) {
+int mynfs_connect(mynfs_connection** connection, const char *host, const char *login, const char *password) {
+	*connection = (mynfs_connection *) malloc(sizeof(mynfs_connection));
+	mynfs_connection* conn = *connection;
+	mynfs_error = 3;
 	cout << "Connecting to " << host << endl;
 
 	conn->socket = socket(AF_INET, SOCK_STREAM, 0);
@@ -42,9 +45,24 @@ int mynfs_connect(mynfs_connection* conn, const char *host, const char *login, c
 	packet.args.connect.login = (char *) login;
 	packet.args.connect.password = (char *) password;
 	if (write_client_packet(conn->socket, &packet) == -1) {
+		cout << "Write error" << endl;
 		mynfs_error = UNKNOWN;
 		return ERROR;
 	}
+	
+	server_packet recv_packet;
+	if (read_server_packet(conn->socket, &recv_packet) == -1) {
+		cout << "Read error" << endl;
+		mynfs_error = UNKNOWN;
+		return ERROR;
+	}
+	if (recv_packet.res != 0) {
+		cout << "Response error" << endl;
+		mynfs_error = UNKNOWN;
+		return ERROR;
+	}
+	cout << "ok" << endl;
+
 	return OK;
 }
 

@@ -5,13 +5,13 @@
 
 using namespace std;
 
-typedef enum {
+enum op_code {
 	CONNECT = 1,
 	OPEN = 2,
-} op_code;
+};
 
 struct client_packet {
-	op_code op;
+	uint8_t op;
 	union {
 		struct {
 			char *login;
@@ -57,46 +57,61 @@ int write_all(int sock, const char *buf, int size) {
 	return 0;
 }
 
-int read_string(int sock, char *str) {
+int read_string(int sock, char **str) {
 	uint32_t size;
 	if (read_to_end(sock, (char *) &size, 4) == -1) return -1;
-	size = ntohs(size);
+	size = ntohl(size);
 	cout << "Reading " << size << " bytes" << endl;
-	str = (char *) malloc(size + 1);
-	if (read_to_end(sock, str, size) == -1) return -1;
-	str[size] = 0;
+	*str = (char *) malloc(size + 1);
+	if (read_to_end(sock, *str, size) == -1) return -1;
+	(*str)[size] = 0;
 	return 0;
 }
 
 int read_client_packet(int sock, client_packet *packet) {
 	uint32_t size;
 	if (read_to_end(sock, (char *) &size, 4) == -1) return -1;
-	size = ntohs(size);
+	size = ntohl(size);
 
-	cout << size << endl;
-	char *buf = (char *) malloc(size);
-	read_to_end(sock, buf, size);
-	for (int i = 0; i < size; i++) {
-		cout << "0x" << hex << (int) buf[i] << dec << endl;
-	}
-	free(buf);
-	// uint8_t op;
-	// if (read_to_end(sock, (char *) &op, 1) == -1) return -1;
-	// switch (op) {
-	// 	case CONNECT:
-	// 		if (read_string(sock, packet->args.connect.login) == -1) return -1;
-	// 		if (read_string(sock, packet->args.connect.password) == -1) return -1;
-	// 		break;
-	// 	default:
-	// 		return -1;
+	cout << "Size: " << size << endl;
+	if (size > 128) return -1;
+
+	// char *buf = (char *) malloc(size);
+	// read_to_end(sock, buf, size);
+	// cout << "[" << hex;
+	// for (unsigned int i = 0; i < size; i++) {
+	// 	if (i != 0) cout << ", ";
+	// 	cout << "0x" << (int) buf[i];
 	// }
+	// cout << dec << "]" << endl;
+	// free(buf);
+
+	if (read_to_end(sock, (char *) &packet->op, 1) == -1) {
+		cout << "Reading op error" << endl;
+		return -1;
+	}
+	switch (packet->op) {
+		case CONNECT:
+			if (read_string(sock, &packet->args.connect.login) == -1) {
+				cout << "Reading login error" << endl;
+				return -1;
+			}
+			if (read_string(sock, &packet->args.connect.password) == -1) {
+				cout << "Reading password error" << endl;
+				return -1;
+			}
+			break;
+		default:
+			cout << "Unknown op: " << packet->op << endl;
+			return -1;
+	}
 	return 0;
 }
 
 int read_server_packet(int sock, server_packet *packet) {
 	uint32_t size;
 	if (read_to_end(sock, (char *) &size, 4) == -1) return -1;
-	size = ntohs(size);
+	size = ntohl(size);
 
 	uint8_t op;
 	if (read_to_end(sock, (char *) &op, 1) == -1) return -1;
@@ -112,8 +127,8 @@ int read_server_packet(int sock, server_packet *packet) {
 
 int write_string(int sock, const char *str) {
 	int len = strlen(str);
-	uint32_t size = htons(len);
-	cout << "Writing " << len << " bytes as " << size << endl;
+	uint32_t size = htonl(len);
+	// cout << "Writing " << len << " bytes as " << size << endl;
 	if (write_all(sock, (char *) &size, 4) == -1) return -1;
 	if (write_all(sock, str, len) == -1) return -1;
 	return 0;
@@ -124,7 +139,7 @@ int string_size(const char *str) {
 	return 4 + strlen(str);
 }
 
-int client_packet_size(const client_packet *packet) {
+uint32_t client_packet_size(const client_packet *packet) {
 	switch (packet->op) {
 		case CONNECT: {
 			int login_size = string_size(packet->args.connect.login);
@@ -132,14 +147,14 @@ int client_packet_size(const client_packet *packet) {
 			return 1 + login_size + password_size;
 		}
 		default:
-			return -1;
+			return (uint32_t) -1;
 	}
 }
 
 int write_client_packet(int sock, const client_packet *packet) {
 	uint32_t size = client_packet_size(packet);
-	if (size == -1) return -1;
-	size = htons(size);
+	if (size == (uint32_t) -1) return -1;
+	size = htonl(size);
 	if (write_all(sock, (const char *) &size, 4) == -1) return -1;
 	uint8_t op = packet->op;
 	if (write_all(sock, (const char *) &op, 1) == -1) return -1;
