@@ -29,7 +29,7 @@ struct packet_stat {
 
 struct client_packet {
 	int op;
-	union {
+	union args {
 		struct {
 			char *login;
 			char *password;
@@ -74,7 +74,7 @@ struct client_packet {
 		struct {
 			char *path;
 		} stat;
-	} args;
+	};
 };
 
 struct server_packet {
@@ -176,6 +176,17 @@ int read_client_packet(int sock, client_packet *packet) {
 				return -1;
 			}
 			break;
+		case OPEN: break;
+		case CLOSE: break;
+		case READ: break;
+		case WRITE: break;
+		case LSEEK: break;
+		case UNLINK: break;
+		case OPENDIR: break;
+		case READDIR: break;
+		case CLOSEDIR: break;
+		case FSTAT: break;
+		case STAT: break;
 		default:
 			cout << "Unknown op: " << packet->op << endl;
 			return -1;
@@ -193,6 +204,17 @@ int read_server_packet(int sock, server_packet *packet) {
 	switch (op) {
 		case CONNECT:
 			break;
+		case OPEN: break;
+		case CLOSE: break;
+		case READ: break;
+		case WRITE: break;
+		case LSEEK: break;
+		case UNLINK: break;
+		case OPENDIR: break;
+		case READDIR: break;
+		case CLOSEDIR: break;
+		case FSTAT: break;
+		case STAT: break;
 		default:
 			return -1;
 	}
@@ -221,8 +243,18 @@ uint32_t client_packet_size(const client_packet *packet) {
 			int password_size = string_size(packet->args.connect.password);
 			return 1 + login_size + password_size;
 		}
-		default:
-			return (uint32_t) -1;
+		case OPEN: return 1 + string_size(packet->args.open.path) + 4 + 4;
+		case CLOSE: return 1 + 4;
+		case READ: return 1 + 4 + 4;
+		case WRITE: return 1 + 4 + 4 + packet->args.write.size;
+		case LSEEK: return 1 + 4 + 4 + 4;
+		case UNLINK: return 1 + string_size(packet->args.unlink.path);
+		case OPENDIR: return 1 + string_size(packet->args.opendir.path);
+		case READDIR: return 1 + 4;
+		case CLOSEDIR: return 1 + 4;
+		case FSTAT: return 1 + 4;
+		case STAT: return 1 + string_size(packet->args.stat.path);
+		default: return (uint32_t) -1;
 	}
 }
 
@@ -238,6 +270,64 @@ int write_client_packet(int sock, const client_packet *packet) {
 			if (write_string(sock, packet->args.connect.login) == -1) return -1;
 			if (write_string(sock, packet->args.connect.password) == -1) return -1;
 			break;
+		case OPEN: break;
+		case CLOSE: break;
+		case READ: break;
+		case WRITE: break;
+		case LSEEK: break;
+		case UNLINK: break;
+		case OPENDIR: break;
+		case READDIR: break;
+		case CLOSEDIR: break;
+		case FSTAT: break;
+		case STAT: break;
+		default:
+			return -1;
+	}
+	return 0;
+}
+
+uint32_t server_packet_size(const server_packet *packet) {
+	switch (packet->op) {
+		case CONNECT: return 1;
+		case OPEN: return 1 + 4;
+		case CLOSE: return 1;
+		case READ: return 1 + 4 + packet->ret.read.size;
+		case WRITE: return 1;
+		case LSEEK: return 1 + 4;
+		case UNLINK: return 1;
+		case OPENDIR: return 1 + 4;
+		case READDIR: return 1 + string_size(packet->ret.readdir.name);
+		case CLOSEDIR: return 1;
+		case FSTAT: return 1 + sizeof(packet_stat);
+		case STAT: return 1 + sizeof(packet_stat);
+		default: return (uint32_t) -1;
+	}
+}
+
+int write_server_packet(int sock, const server_packet *packet) {
+	uint32_t size = server_packet_size(packet);
+	if (size == (uint32_t) -1) return -1;
+	size = htonl(size);
+	if (write_all(sock, (const char *) &size, 4) == -1) return -1;
+	uint8_t op = packet->op;
+	if (write_all(sock, (const char *) &op, 1) == -1) return -1;
+	switch (op) {
+		case CONNECT:
+			if (write_string(sock, packet->args.connect.login) == -1) return -1;
+			if (write_string(sock, packet->args.connect.password) == -1) return -1;
+			break;
+		case OPEN: break;
+		case CLOSE: break;
+		case READ: break;
+		case WRITE: break;
+		case LSEEK: break;
+		case UNLINK: break;
+		case OPENDIR: break;
+		case READDIR: break;
+		case CLOSEDIR: break;
+		case FSTAT: break;
+		case STAT: break;
 		default:
 			return -1;
 	}
