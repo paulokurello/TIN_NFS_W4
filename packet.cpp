@@ -5,6 +5,13 @@
 
 using namespace std;
 
+#define try(op, msg) {\
+	if ((op) == -1) {\
+		cout << (msg) << endl;\
+		return -1;\
+	}\
+}
+
 enum op_code {
 	CONNECT = 1,
 	OPEN = 2,
@@ -36,25 +43,25 @@ struct client_packet {
 		} connect;
 		struct {
 			char *path;
-			int oflag;
-			int mode;
+			uint32_t oflag;
+			uint32_t mode;
 		} open;
 		struct {
-			int fd;
+			uint32_t fd;
 		} close;
 		struct {
-			int fd;
-			int size;
+			uint32_t fd;
+			uint32_t size;
 		} read;
 		struct {
-			int fd;
+			uint32_t fd;
 			void *data;
-			int size;
+			uint32_t size;
 		} write;
 		struct {
-			int fd;
-			int offset;
-			int whence;
+			uint32_t fd;
+			uint32_t offset;
+			uint32_t whence;
 		} lseek;
 		struct {
 			char *path;
@@ -63,13 +70,13 @@ struct client_packet {
 			char *path;
 		} opendir;
 		struct {
-			int dir_fd;
+			uint32_t dir_fd;
 		} readdir;
 		struct {
-			int dir_fd;
+			uint32_t dir_fd;
 		} closedir;
 		struct {
-			int fd;
+			uint32_t fd;
 		} fstat;
 		struct {
 			char *path;
@@ -82,20 +89,20 @@ struct server_packet {
 	union {
 		struct {} connect;
 		struct {
-			int fd;
+			uint32_t fd;
 		} open;
 		struct {} close;
 		struct {
 			void *data;
-			int size;
+			uint32_t size;
 		} read;
 		struct {} write;
 		struct {
-			int offset;
+			uint32_t offset;
 		} lseek;
 		struct {} unlink;
 		struct {
-			int fd;
+			uint32_t dir_fd;
 		} opendir;
 		struct {
 			char *name;
@@ -143,10 +150,19 @@ int read_string(int sock, char **str) {
 	return 0;
 }
 
+int read_u32(int sock, uint32_t *value) {
+	if (read_to_end(sock, (char *) value, 4) == -1) return -1;
+	*value = ntohl(*value);
+	return 0;
+}
+int read_stat(int sock, packet_stat *stat) {
+	// TODO
+	return -1;
+}
+
 int read_client_packet(int sock, client_packet *packet) {
 	uint32_t size;
-	if (read_to_end(sock, (char *) &size, 4) == -1) return -1;
-	size = ntohl(size);
+	if (read_u32(sock, &size) == -1) return -1;
 
 	cout << "Size: " << size << endl;
 	if (size > 128) return -1;
@@ -161,32 +177,53 @@ int read_client_packet(int sock, client_packet *packet) {
 	// cout << dec << "]" << endl;
 	// free(buf);
 
-	if (read_to_end(sock, (char *) &packet->op, 1) == -1) {
-		cout << "Reading op error" << endl;
-		return -1;
-	}
+	try(read_to_end(sock, (char *) &packet->op, 1), "Reading op error");
 	switch (packet->op) {
 		case CONNECT:
-			if (read_string(sock, &packet->args.connect.login) == -1) {
-				cout << "Reading login error" << endl;
-				return -1;
-			}
-			if (read_string(sock, &packet->args.connect.password) == -1) {
-				cout << "Reading password error" << endl;
-				return -1;
-			}
+			try(read_string(sock, &packet->args.connect.login), "Reading login error");
+			try(read_string(sock, &packet->args.connect.password), "Reading password error");
 			break;
-		case OPEN: break;
-		case CLOSE: break;
-		case READ: break;
-		case WRITE: break;
-		case LSEEK: break;
-		case UNLINK: break;
-		case OPENDIR: break;
-		case READDIR: break;
-		case CLOSEDIR: break;
-		case FSTAT: break;
-		case STAT: break;
+		case OPEN:
+			try(read_string(sock, &packet->args.open.path), "Reading open path");
+			try(read_u32(sock, &packet->args.open.oflag), "Reading open flag error");
+			try(read_u32(sock, &packet->args.open.mode), "Reading open mode error");
+			break;
+		case CLOSE:
+			try(read_u32(sock, &packet->args.close.fd), "Reading close fd error");
+			break;
+		case READ:
+			try(read_u32(sock, &packet->args.read.fd), "Reading read fd error");
+			try(read_u32(sock, &packet->args.read.size), "Reading read size error");
+			break;
+		case WRITE:
+			try(read_u32(sock, &packet->args.write.fd), "Reading write fd error");
+			try(read_u32(sock, &packet->args.write.size), "Reading write size error");
+			packet->args.write.data = malloc(packet->args.write.size);
+			try(read_to_end(sock, (char *) &packet->args.write.data, size), "Reading write data error");
+			break;
+		case LSEEK:
+			try(read_u32(sock, &packet->args.lseek.fd), "Reading lseek fd error");
+			try(read_u32(sock, &packet->args.lseek.offset), "Reading lseek offset error");
+			try(read_u32(sock, &packet->args.lseek.whence), "Reading lseek whence error");
+			break;
+		case UNLINK:
+			try(read_string(sock, &packet->args.unlink.path), "Reading unlink path");
+			break;
+		case OPENDIR:
+			try(read_string(sock, &packet->args.opendir.path), "Reading opendir path");
+			break;
+		case READDIR:
+			try(read_u32(sock, &packet->args.readdir.dir_fd), "Reading readdir dir_fd error");
+			break;
+		case CLOSEDIR:
+			try(read_u32(sock, &packet->args.closedir.dir_fd), "Reading closedir dir_fd error");
+			break;
+		case FSTAT:
+			try(read_u32(sock, &packet->args.fstat.fd), "Reading fstat fd error");
+			break;
+		case STAT:
+			try(read_string(sock, &packet->args.stat.path), "Reading stat path");
+			break;
 		default:
 			cout << "Unknown op: " << packet->op << endl;
 			return -1;
@@ -202,21 +239,35 @@ int read_server_packet(int sock, server_packet *packet) {
 	uint8_t op;
 	if (read_to_end(sock, (char *) &op, 1) == -1) return -1;
 	switch (op) {
-		case CONNECT:
+		case CONNECT: break;
+		case OPEN:
+			try(read_u32(sock, &packet->ret.open.fd), "Reading open fd error");
 			break;
-		case OPEN: break;
 		case CLOSE: break;
-		case READ: break;
+		case READ:
+			try(read_u32(sock, &packet->ret.read.size), "Reading read size error");
+			packet->ret.read.data = malloc(packet->ret.read.size);
+			try(read_to_end(sock, (char *) &packet->ret.read.data, size), "Reading read data error");
+			break;
 		case WRITE: break;
-		case LSEEK: break;
+		case LSEEK:
+			try(read_u32(sock, &packet->ret.lseek.offset), "Reading lseek offset error");
+			break;
 		case UNLINK: break;
-		case OPENDIR: break;
-		case READDIR: break;
+		case OPENDIR:
+			try(read_u32(sock, &packet->ret.opendir.dir_fd), "Reading opendir dir_fd error");
+			break;
+		case READDIR:
+			try(read_string(sock, &packet->ret.readdir.name), "Reading readdir name error");
+			break;
 		case CLOSEDIR: break;
-		case FSTAT: break;
-		case STAT: break;
-		default:
-			return -1;
+		case FSTAT:
+			try(read_stat(sock, &packet->ret.fstat.stat), "Reading fstat stat error");
+			break;
+		case STAT:
+			try(read_stat(sock, &packet->ret.stat.stat), "Reading stat stat error");
+			break;
+		default: return -1;
 	}
 	
 	return 0;
@@ -288,7 +339,7 @@ int write_client_packet(int sock, const client_packet *packet) {
 }
 
 uint32_t server_packet_size(const server_packet *packet) {
-	switch (packet->op) {
+	switch (packet->res) {
 		case CONNECT: return 1;
 		case OPEN: return 1 + 4;
 		case CLOSE: return 1;
@@ -303,6 +354,7 @@ uint32_t server_packet_size(const server_packet *packet) {
 		case STAT: return 1 + sizeof(packet_stat);
 		default: return (uint32_t) -1;
 	}
+	return (uint32_t) -1;
 }
 
 int write_server_packet(int sock, const server_packet *packet) {
@@ -310,13 +362,10 @@ int write_server_packet(int sock, const server_packet *packet) {
 	if (size == (uint32_t) -1) return -1;
 	size = htonl(size);
 	if (write_all(sock, (const char *) &size, 4) == -1) return -1;
-	uint8_t op = packet->op;
-	if (write_all(sock, (const char *) &op, 1) == -1) return -1;
-	switch (op) {
-		case CONNECT:
-			if (write_string(sock, packet->args.connect.login) == -1) return -1;
-			if (write_string(sock, packet->args.connect.password) == -1) return -1;
-			break;
+	uint8_t res = packet->res;
+	if (write_all(sock, (const char *) &res, 1) == -1) return -1;
+	switch (res) {
+		case CONNECT: break;
 		case OPEN: break;
 		case CLOSE: break;
 		case READ: break;
