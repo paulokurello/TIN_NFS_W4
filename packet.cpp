@@ -29,7 +29,7 @@ struct packet_stat {
 
 struct client_packet {
 	int op;
-	union args {
+	union {
 		struct {
 			char *login;
 			char *password;
@@ -74,12 +74,12 @@ struct client_packet {
 		struct {
 			char *path;
 		} stat;
-	};
+	} args;
 };
 
 struct server_packet {
 	int res;
-	union ret {
+	union {
 		struct {} connect;
 		struct {
 			int fd;
@@ -107,7 +107,7 @@ struct server_packet {
 		struct {
 			packet_stat stat;
 		} stat;
-	};
+	} ret;
 };
 
 int read_to_end(int sock, char *buf, int size) {
