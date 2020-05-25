@@ -40,6 +40,7 @@ int mynfs_connect(mynfs_connection** connection, const char *host, const char *l
 		mynfs_error = UNKNOWN;
 		return ERROR;
 	}
+
 	client_packet packet;
 	packet.op = CONNECT;
 	packet.args.connect.login = (char *) login;
@@ -72,3 +73,6 @@ int mynfs_open(mynfs_connection* conn, const char *path, int oflag, int mode) {
     return ERROR;
 }
 
+int mynfs_close(mynfs_connection* conn, int fd) {
+	return ERROR;
+}
