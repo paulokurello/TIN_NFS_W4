@@ -8,10 +8,27 @@ using namespace std;
 enum op_code {
 	CONNECT = 1,
 	OPEN = 2,
+	CLOSE = 3,
+	READ = 4,
+	WRITE = 5,
+	LSEEK = 6,
+	UNLINK = 7,
+	OPENDIR = 8,
+	READDIR = 9,
+	CLOSEDIR = 10,
+	FSTAT = 11,
+	STAT = 12,
+};
+
+struct packet_stat {
+    char *name;
+    int mode;
+    int uid;
+    int size;
 };
 
 struct client_packet {
-	uint8_t op;
+	int op;
 	union {
 		struct {
 			char *login;
@@ -22,6 +39,41 @@ struct client_packet {
 			int oflag;
 			int mode;
 		} open;
+		struct {
+			int fd;
+		} close;
+		struct {
+			int fd;
+			int size;
+		} read;
+		struct {
+			int fd;
+			void *data;
+			int size;
+		} write;
+		struct {
+			int fd;
+			int offset;
+			int whence;
+		} lseek;
+		struct {
+			char *path;
+		} unlink;
+		struct {
+			char *path;
+		} opendir;
+		struct {
+			int dir_fd;
+		} readdir;
+		struct {
+			int dir_fd;
+		} closedir;
+		struct {
+			int fd;
+		} fstat;
+		struct {
+			char *path;
+		} stat;
 	} args;
 };
 
@@ -32,6 +84,29 @@ struct server_packet {
 		struct {
 			int fd;
 		} open;
+		struct {} close;
+		struct {
+			void *data;
+			int size;
+		} read;
+		struct {} write;
+		struct {
+			int offset;
+		} lseek;
+		struct {} unlink;
+		struct {
+			int fd;
+		} opendir;
+		struct {
+			char *name;
+		} readdir;
+		struct {} closedir;
+		struct {
+			packet_stat stat;
+		} fstat;
+		struct {
+			packet_stat stat;
+		} stat;
 	};
 };
 
