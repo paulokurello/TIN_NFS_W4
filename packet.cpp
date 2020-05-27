@@ -29,9 +29,9 @@ enum op_code {
 
 struct packet_stat {
     char *name;
-    int mode;
-    int uid;
-    int size;
+    uint32_t mode;
+    uint32_t uid;
+    uint32_t size;
 };
 
 struct client_packet {
@@ -55,8 +55,8 @@ struct client_packet {
 		} read;
 		struct {
 			uint32_t fd;
-			void *data;
 			uint32_t size;
+			void *data;
 		} write;
 		struct {
 			uint32_t fd;
@@ -93,8 +93,8 @@ struct server_packet {
 		} open;
 		struct {} close;
 		struct {
-			void *data;
 			uint32_t size;
+			void *data;
 		} read;
 		struct {} write;
 		struct {
@@ -156,8 +156,11 @@ int read_u32(int sock, uint32_t *value) {
 	return 0;
 }
 int read_stat(int sock, packet_stat *stat) {
-	// TODO
-	return -1;
+	if (read_string(sock, &stat->name) == -1) return -1;
+	if (read_u32(sock, &stat->mode) == -1) return -1;
+	if (read_u32(sock, &stat->uid) == -1) return -1;
+	if (read_u32(sock, &stat->size) == -1) return -1;
+	return 0;
 }
 
 int read_client_packet(int sock, client_packet *packet) {
@@ -282,6 +285,19 @@ int write_string(int sock, const char *str) {
 	return 0;
 }
 
+int write_u32(int sock, uint32_t value) {
+	if (write_all(sock, (const char *) &value, sizeof(value)) == -1) return -1;
+	return 0;
+}
+
+int write_stat(int sock, packet_stat stat) {
+	if (write_string(sock, stat.name) == -1) return -1;
+	if (write_u32(sock, stat.mode) == -1) return -1;
+	if (write_u32(sock, stat.uid) == -1) return -1;
+	if (write_u32(sock, stat.size) == -1) return -1;
+	return 0;
+}
+
 // Packeted string is uint32_t (4 bytes) + data
 int string_size(const char *str) {
 	return 4 + strlen(str);
@@ -318,20 +334,49 @@ int write_client_packet(int sock, const client_packet *packet) {
 	if (write_all(sock, (const char *) &op, 1) == -1) return -1;
 	switch (op) {
 		case CONNECT:
-			if (write_string(sock, packet->args.connect.login) == -1) return -1;
-			if (write_string(sock, packet->args.connect.password) == -1) return -1;
+			try(write_string(sock, packet->args.connect.login), "Writing connect login error");
+			try(write_string(sock, packet->args.connect.password), "Writing connect password error");
 			break;
-		case OPEN: break;
-		case CLOSE: break;
-		case READ: break;
-		case WRITE: break;
-		case LSEEK: break;
-		case UNLINK: break;
-		case OPENDIR: break;
-		case READDIR: break;
-		case CLOSEDIR: break;
-		case FSTAT: break;
-		case STAT: break;
+		case OPEN:
+			try(write_string(sock, packet->args.open.path), "Writing open path error");
+			try(write_u32(sock, packet->args.open.oflag), "Writing open oflag error");
+			try(write_u32(sock, packet->args.open.mode), "Writing open mode error");
+			break;
+		case CLOSE:
+			try(write_u32(sock, packet->args.close.fd), "Writing close fd error");
+			break;
+		case READ:
+			try(write_u32(sock, packet->args.read.fd), "Writing read fd error");
+			try(write_u32(sock, packet->args.read.size), "Writing read size error");
+			break;
+		case WRITE:
+			try(write_u32(sock, packet->args.write.fd), "Writing write fd error");
+			try(write_u32(sock, packet->args.write.size), "Writing write size error");
+			try(write_all(sock, (const char *) packet->args.write.data, packet->args.write.size), "Writing write data error");
+			break;
+		case LSEEK:
+			try(write_u32(sock, packet->args.lseek.fd), "Writing lseek fd error");
+			try(write_u32(sock, packet->args.lseek.offset), "Writing lseek offset error");
+			try(write_u32(sock, packet->args.lseek.whence), "Writing lseek whence error");
+			break;
+		case UNLINK:
+			try(write_string(sock, packet->args.unlink.path), "Writing unlink path error");
+			break;
+		case OPENDIR:
+			try(write_string(sock, packet->args.opendir.path), "Writing opendir path error");
+			break;
+		case READDIR:
+			try(write_u32(sock, packet->args.readdir.dir_fd), "Writing readdir dir_fd error");
+			break;
+		case CLOSEDIR:
+			try(write_u32(sock, packet->args.closedir.dir_fd), "Writing closedir dir_fd error");
+			break;
+		case FSTAT:
+			try(write_u32(sock, packet->args.fstat.fd), "Writing fstat fd error");
+			break;
+		case STAT:
+			try(write_string(sock, packet->args.stat.path), "Writing stat path error");
+			break;
 		default:
 			return -1;
 	}
@@ -366,17 +411,32 @@ int write_server_packet(int sock, const server_packet *packet) {
 	if (write_all(sock, (const char *) &res, 1) == -1) return -1;
 	switch (res) {
 		case CONNECT: break;
-		case OPEN: break;
+		case OPEN: 
+			try(write_u32(sock, packet->ret.open.fd), "Writing open fd error");
+			break;
 		case CLOSE: break;
-		case READ: break;
+		case READ: 
+			try(write_u32(sock, packet->ret.read.size), "Writing read size error");
+			try(write_all(sock, (const char *) packet->ret.read.data, packet->ret.read.size), "Writing read data error");
+			break;
 		case WRITE: break;
-		case LSEEK: break;
+		case LSEEK: 
+			try(write_u32(sock, packet->ret.lseek.offset), "Writing lseek offset error");
+			break;
 		case UNLINK: break;
-		case OPENDIR: break;
-		case READDIR: break;
+		case OPENDIR: 
+			try(write_u32(sock, packet->ret.opendir.dir_fd), "Writing opendir dir_fd error");
+			break;
+		case READDIR: 
+			try(write_string(sock, packet->ret.readdir.name), "Writing readdir name error");
+			break;
 		case CLOSEDIR: break;
-		case FSTAT: break;
-		case STAT: break;
+		case FSTAT: 
+			try(write_stat(sock, packet->ret.fstat.stat), "Writing fstat stat error");
+			break;
+		case STAT: 
+			try(write_stat(sock, packet->ret.stat.stat), "Writing stat stat error");
+			break;
 		default:
 			return -1;
 	}
