@@ -25,6 +25,7 @@ enum op_code {
 	CLOSEDIR = 10,
 	FSTAT = 11,
 	STAT = 12,
+	KEEPALIVE = 13,
 };
 
 struct packet_stat {
@@ -35,7 +36,7 @@ struct packet_stat {
 };
 
 struct client_packet {
-	int op;
+	uint8_t op;
 	union {
 		struct {
 			char *login;
@@ -81,11 +82,12 @@ struct client_packet {
 		struct {
 			char *path;
 		} stat;
+		struct {} keepalive;
 	} args;
 };
 
 struct server_packet {
-	int res;
+	uint8_t res;
 	union {
 		struct {} connect;
 		struct {
@@ -114,6 +116,7 @@ struct server_packet {
 		struct {
 			packet_stat stat;
 		} stat;
+		struct {} keepalive;
 	} ret;
 };
 
@@ -121,7 +124,11 @@ int read_to_end(int sock, char *buf, int size) {
 	int left = size;
 	while (left > 0) {
 		int n = read(sock, buf, left);
-		if (n < 1) return -1;
+		if (n == 0) return 0;
+		if (n < 0) {
+			cout << strerror(errno) << endl;
+			return -1;
+		} 
 		left -= n;
 		buf += n;
 	}
@@ -132,7 +139,11 @@ int write_all(int sock, const char *buf, int size) {
 	int left = size;
 	while (left > 0) {
 		int n = write(sock, buf, left);
-		if (n < 1) return -1;
+		if (n == 0) return 0;
+		if (n < 0) {
+			cout << strerror(errno) << endl;
+			return -1;
+		} 
 		left -= n;
 		buf += n;
 	}
@@ -227,6 +238,7 @@ int read_client_packet(int sock, client_packet *packet) {
 		case STAT:
 			try(read_string(sock, &packet->args.stat.path), "Reading stat path");
 			break;
+		case KEEPALIVE: break;
 		default:
 			cout << "Unknown op: " << packet->op << endl;
 			return -1;
@@ -236,11 +248,11 @@ int read_client_packet(int sock, client_packet *packet) {
 
 int read_server_packet(int sock, server_packet *packet) {
 	uint32_t size;
-	if (read_to_end(sock, (char *) &size, 4) == -1) return -1;
+	try(read_u32(sock, &size), "Reading size error");
 	size = ntohl(size);
 
 	uint8_t op;
-	if (read_to_end(sock, (char *) &op, 1) == -1) return -1;
+	try(read_to_end(sock, (char *) &op, 1), "Reading op error");
 	switch (op) {
 		case CONNECT: break;
 		case OPEN:
@@ -270,6 +282,7 @@ int read_server_packet(int sock, server_packet *packet) {
 		case STAT:
 			try(read_stat(sock, &packet->ret.stat.stat), "Reading stat stat error");
 			break;
+		case KEEPALIVE: break;
 		default: return -1;
 	}
 	
@@ -321,6 +334,7 @@ uint32_t client_packet_size(const client_packet *packet) {
 		case CLOSEDIR: return 1 + 4;
 		case FSTAT: return 1 + 4;
 		case STAT: return 1 + string_size(packet->args.stat.path);
+		case KEEPALIVE: return 1;
 		default: return (uint32_t) -1;
 	}
 }
@@ -377,14 +391,15 @@ int write_client_packet(int sock, const client_packet *packet) {
 		case STAT:
 			try(write_string(sock, packet->args.stat.path), "Writing stat path error");
 			break;
+		case KEEPALIVE: break;
 		default:
 			return -1;
 	}
 	return 0;
 }
 
-uint32_t server_packet_size(const server_packet *packet) {
-	switch (packet->res) {
+uint32_t server_packet_size(const server_packet *packet, int op) {
+	switch (op) {
 		case CONNECT: return 1;
 		case OPEN: return 1 + 4;
 		case CLOSE: return 1;
@@ -397,19 +412,22 @@ uint32_t server_packet_size(const server_packet *packet) {
 		case CLOSEDIR: return 1;
 		case FSTAT: return 1 + sizeof(packet_stat);
 		case STAT: return 1 + sizeof(packet_stat);
+		case KEEPALIVE: return 1;
 		default: return (uint32_t) -1;
 	}
 	return (uint32_t) -1;
 }
 
-int write_server_packet(int sock, const server_packet *packet) {
-	uint32_t size = server_packet_size(packet);
+// In server packet, op is "implicit", i.e. is based on previous packet
+// E.g. if server receives packet with READ in op, it will send back read packet with data
+int write_server_packet(int sock, const server_packet *packet, int op) {
+	uint32_t size = server_packet_size(packet, op);
 	if (size == (uint32_t) -1) return -1;
 	size = htonl(size);
 	if (write_all(sock, (const char *) &size, 4) == -1) return -1;
 	uint8_t res = packet->res;
 	if (write_all(sock, (const char *) &res, 1) == -1) return -1;
-	switch (res) {
+	switch (op) {
 		case CONNECT: break;
 		case OPEN: 
 			try(write_u32(sock, packet->ret.open.fd), "Writing open fd error");
@@ -437,6 +455,7 @@ int write_server_packet(int sock, const server_packet *packet) {
 		case STAT: 
 			try(write_stat(sock, packet->ret.stat.stat), "Writing stat stat error");
 			break;
+		case KEEPALIVE: break;
 		default:
 			return -1;
 	}

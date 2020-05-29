@@ -58,11 +58,10 @@ int mynfs_connect(mynfs_connection** connection, const char *host, const char *l
 		return ERROR;
 	}
 	if (recv_packet.res != 0) {
-		cout << "Response error" << endl;
+		cout << "Response error: " << recv_packet.res << endl;
 		mynfs_error = UNKNOWN;
 		return ERROR;
 	}
-	cout << "ok" << endl;
 
 	return OK;
 }
@@ -74,5 +73,13 @@ int mynfs_open(mynfs_connection* conn, const char *path, int oflag, int mode) {
 }
 
 int mynfs_close(mynfs_connection* conn, int fd) {
+	return ERROR;
+}
+
+int mynfs_read(mynfs_connection* conn, int fd, void *buf, int size) {
+	return ERROR;
+}
+
+int mynfs_write(mynfs_connection* conn, int fd, const void *buf, int size) {
 	return ERROR;
 }

@@ -6,7 +6,7 @@ using namespace std;
 
 int main(int argc, char *argv[]) {
 	mynfs_connection *conn;
-	if (mynfs_connect(&conn, "127.0.0.1", "adam", "hunter51") == -1) {
+	if (mynfs_connect(&conn, "127.0.0.1", "admexter", "hunter51") == -1) {
 		cout << "Got mynfs error on connection: " << mynfs_error << endl;
 		return -1;
 	}
