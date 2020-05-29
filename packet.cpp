@@ -179,17 +179,7 @@ int read_client_packet(int sock, client_packet *packet) {
 	if (read_u32(sock, &size) == -1) return -1;
 
 	cout << "Size: " << size << endl;
-	if (size > 128) return -1;
-
-	// char *buf = (char *) malloc(size);
-	// read_to_end(sock, buf, size);
-	// cout << "[" << hex;
-	// for (unsigned int i = 0; i < size; i++) {
-	// 	if (i != 0) cout << ", ";
-	// 	cout << "0x" << (int) buf[i];
-	// }
-	// cout << dec << "]" << endl;
-	// free(buf);
+	// if (size > 128) return -1;
 
 	try(read_to_end(sock, (char *) &packet->op, 1), "Reading op error");
 	switch (packet->op) {
@@ -240,19 +230,19 @@ int read_client_packet(int sock, client_packet *packet) {
 			break;
 		case KEEPALIVE: break;
 		default:
-			cout << "Unknown op: " << packet->op << endl;
+			cout << "[read_client_packet] Unknown op: " << (int) packet->op << endl;
 			return -1;
 	}
 	return 0;
 }
 
-int read_server_packet(int sock, server_packet *packet) {
+int read_server_packet(int sock, server_packet *packet, int op) {
 	uint32_t size;
 	try(read_u32(sock, &size), "Reading size error");
 	size = ntohl(size);
 
-	uint8_t op;
-	try(read_to_end(sock, (char *) &op, 1), "Reading op error");
+	uint8_t res;
+	try(read_to_end(sock, (char *) &res, 1), "Reading res error");
 	switch (op) {
 		case CONNECT: break;
 		case OPEN:
@@ -283,7 +273,9 @@ int read_server_packet(int sock, server_packet *packet) {
 			try(read_stat(sock, &packet->ret.stat.stat), "Reading stat stat error");
 			break;
 		case KEEPALIVE: break;
-		default: return -1;
+		default:
+			cout << "[read_server_packet] Unknown op: " << (int) op << endl;
+			return -1;
 	}
 	
 	return 0;

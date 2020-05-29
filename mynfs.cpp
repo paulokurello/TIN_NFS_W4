@@ -21,7 +21,7 @@ int mynfs_connect(mynfs_connection** connection, const char *host, const char *l
 
 	conn->socket = socket(AF_INET, SOCK_STREAM, 0);
 	if (conn->socket == -1) {
-		perror("Socket error");
+		perror("[mynfs_connection] Socket error");
 		mynfs_error = UNKNOWN;
 		return ERROR;
 	}
@@ -36,7 +36,7 @@ int mynfs_connect(mynfs_connection** connection, const char *host, const char *l
 	}
 
 	if (connect(conn->socket, (sockaddr*) &addr, sizeof(addr))) {
-		perror("Connect error");
+		perror("[mynfs_connection] Connect error");
 		mynfs_error = UNKNOWN;
 		return ERROR;
 	}
@@ -46,19 +46,19 @@ int mynfs_connect(mynfs_connection** connection, const char *host, const char *l
 	packet.args.connect.login = (char *) login;
 	packet.args.connect.password = (char *) password;
 	if (write_client_packet(conn->socket, &packet) == -1) {
-		cout << "Write error" << endl;
+		cout << "[mynfs_connection] Write error" << endl;
 		mynfs_error = UNKNOWN;
 		return ERROR;
 	}
 	
 	server_packet recv_packet;
-	if (read_server_packet(conn->socket, &recv_packet) == -1) {
-		cout << "Read error" << endl;
+	if (read_server_packet(conn->socket, &recv_packet, CONNECT) == -1) {
+		cout << "[mynfs_connection] Read error" << endl;
 		mynfs_error = UNKNOWN;
 		return ERROR;
 	}
 	if (recv_packet.res != 0) {
-		cout << "Response error: " << recv_packet.res << endl;
+		cout << "[mynfs_connection] Response error: " << recv_packet.res << endl;
 		mynfs_error = UNKNOWN;
 		return ERROR;
 	}
@@ -68,8 +68,31 @@ int mynfs_connect(mynfs_connection** connection, const char *host, const char *l
 
 int mynfs_open(mynfs_connection* conn, const char *path, int oflag, int mode) {
     cout << "Opening file " << path << endl;
-    mynfs_error = 1;
-    return ERROR;
+    
+	client_packet packet;
+	packet.op = OPEN;
+	packet.args.open.path = (char *) path;
+	packet.args.open.oflag = oflag;
+	packet.args.open.mode = mode;
+	if (write_client_packet(conn->socket, &packet) == -1) {
+		cout << "[mynfs_open] Write error" << endl;
+		mynfs_error = UNKNOWN;
+		return ERROR;
+	}
+	
+	server_packet recv_packet;
+	if (read_server_packet(conn->socket, &recv_packet, OPEN) == -1) {
+		cout << "[mynfs_open] Read error" << endl;
+		mynfs_error = UNKNOWN;
+		return ERROR;
+	}
+	if (recv_packet.res != 0) {
+		cout << "[mynfs_open] Response error: " << recv_packet.res << endl;
+		mynfs_error = UNKNOWN;
+		return ERROR;
+	}
+
+	return recv_packet.ret.open.fd;
 }
 
 int mynfs_close(mynfs_connection* conn, int fd) {

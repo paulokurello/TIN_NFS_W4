@@ -190,5 +190,38 @@ int check_client_pass(int sock, Users *users) {
 }
 
 void handle_client(int sock) {
+	while (true) {
+		client_packet packet;
+		server_packet s_packet;
+		if(read_client_packet(sock, &packet) == -1) {
+			cout << "[handle_client] Read error" << endl;
+			return;
+		}
+		switch(packet.op) {
+			case OPEN: 
+				s_packet.ret.open.fd = 0;
+				break;
+			case CLOSE: break;
+			case READ: break;
+			case WRITE: break;
+			case LSEEK: break;
+			case UNLINK: break;
+			case OPENDIR: break;
+			case READDIR: break;
+			case CLOSEDIR: break;
+			case FSTAT: break;
+			case STAT: break;
+			case KEEPALIVE:
+				s_packet.res = 0;
+				break;
+			default:
+				cout << "[handle_client] Invalid op" << packet.op << endl;
+				return;
+		}
+		if (write_server_packet(sock, &s_packet, packet.op) == -1) {
+			cout << "[handle_client] Write error" << endl;
+			return;
+		}
+	}
 	return;
 }
