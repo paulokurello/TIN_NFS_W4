@@ -3,6 +3,8 @@
 #include <arpa/inet.h>
 #include <cstring>
 
+#include "packet.h"
+
 using namespace std;
 
 #define try(op, msg) {\
@@ -11,114 +13,6 @@ using namespace std;
 		return -1;\
 	}\
 }
-
-enum op_code {
-	CONNECT = 1,
-	OPEN = 2,
-	CLOSE = 3,
-	READ = 4,
-	WRITE = 5,
-	LSEEK = 6,
-	UNLINK = 7,
-	OPENDIR = 8,
-	READDIR = 9,
-	CLOSEDIR = 10,
-	FSTAT = 11,
-	STAT = 12,
-	KEEPALIVE = 13,
-};
-
-struct packet_stat {
-    char *name;
-    uint32_t mode;
-    uint32_t uid;
-    uint32_t size;
-};
-
-struct client_packet {
-	uint8_t op;
-	union {
-		struct {
-			char *login;
-			char *password;
-		} connect;
-		struct {
-			char *path;
-			uint32_t oflag;
-			uint32_t mode;
-		} open;
-		struct {
-			uint32_t fd;
-		} close;
-		struct {
-			uint32_t fd;
-			uint32_t size;
-		} read;
-		struct {
-			uint32_t fd;
-			uint32_t size;
-			void *data;
-		} write;
-		struct {
-			uint32_t fd;
-			uint32_t offset;
-			uint32_t whence;
-		} lseek;
-		struct {
-			char *path;
-		} unlink;
-		struct {
-			char *path;
-		} opendir;
-		struct {
-			uint32_t dir_fd;
-		} readdir;
-		struct {
-			uint32_t dir_fd;
-		} closedir;
-		struct {
-			uint32_t fd;
-		} fstat;
-		struct {
-			char *path;
-		} stat;
-		struct {} keepalive;
-	} args;
-};
-
-struct server_packet {
-	uint8_t res;
-	union {
-		struct {} connect;
-		struct {
-			uint32_t fd;
-		} open;
-		struct {} close;
-		struct {
-			uint32_t size;
-			void *data;
-		} read;
-		struct {} write;
-		struct {
-			uint32_t offset;
-		} lseek;
-		struct {} unlink;
-		struct {
-			uint32_t dir_fd;
-		} opendir;
-		struct {
-			char *name;
-		} readdir;
-		struct {} closedir;
-		struct {
-			packet_stat stat;
-		} fstat;
-		struct {
-			packet_stat stat;
-		} stat;
-		struct {} keepalive;
-	} ret;
-};
 
 int read_to_end(int sock, char *buf, int size) {
 	int left = size;
@@ -166,7 +60,7 @@ int read_u32(int sock, uint32_t *value) {
 	*value = ntohl(*value);
 	return 0;
 }
-int read_stat(int sock, packet_stat *stat) {
+int read_stat(int sock, fd_stat *stat) {
 	if (read_string(sock, &stat->name) == -1) return -1;
 	if (read_u32(sock, &stat->mode) == -1) return -1;
 	if (read_u32(sock, &stat->uid) == -1) return -1;
@@ -295,7 +189,7 @@ int write_u32(int sock, uint32_t value) {
 	return 0;
 }
 
-int write_stat(int sock, packet_stat stat) {
+int write_stat(int sock, fd_stat stat) {
 	if (write_string(sock, stat.name) == -1) return -1;
 	if (write_u32(sock, stat.mode) == -1) return -1;
 	if (write_u32(sock, stat.uid) == -1) return -1;
@@ -402,8 +296,8 @@ uint32_t server_packet_size(const server_packet *packet, int op) {
 		case OPENDIR: return 1 + 4;
 		case READDIR: return 1 + string_size(packet->ret.readdir.name);
 		case CLOSEDIR: return 1;
-		case FSTAT: return 1 + sizeof(packet_stat);
-		case STAT: return 1 + sizeof(packet_stat);
+		case FSTAT: return 1 + sizeof(fd_stat);
+		case STAT: return 1 + sizeof(fd_stat);
 		case KEEPALIVE: return 1;
 		default: return (uint32_t) -1;
 	}

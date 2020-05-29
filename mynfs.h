@@ -1,17 +1,6 @@
+#include "packet.h"
+
 struct mynfs_connection;
-
-struct stat {
-    char *name;
-    int mode;
-    int uid;
-    int size;
-};
-
-enum mynfs_errorcode {
-    NONE = 0,
-    UNKNOWN = 1,
-    INVALID_ARGUMENTS = 2,
-};
 
 enum oflags {
 	O_RDONLY,
@@ -38,5 +27,5 @@ int mynfs_unlink(mynfs_connection* conn, char *path);
 int mynfs_opendir(mynfs_connection* conn, char *path);
 char *mynfs_readdir(mynfs_connection* conn, int dir_fd);
 int mynfs_closedir(mynfs_connection* conn, int dir_fd);
-int mynfs_fstat(mynfs_connection* conn, int fd, stat *stat);
-int mynfs_stat(mynfs_connection* conn, char *path, stat *stat);
+int mynfs_fstat(mynfs_connection* conn, int fd, fd_stat *stat);
+int mynfs_stat(mynfs_connection* conn, char *path, fd_stat *stat);
