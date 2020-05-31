@@ -14,6 +14,8 @@ using namespace std;
 	}\
 }
 
+//! Packet marshalling
+
 int read_to_end(int sock, char *buf, int size) {
 	int left = size;
 	while (left > 0) {

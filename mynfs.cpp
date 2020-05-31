@@ -96,13 +96,266 @@ int mynfs_open(mynfs_connection* conn, const char *path, int oflag, int mode) {
 }
 
 int mynfs_close(mynfs_connection* conn, int fd) {
-	return ERROR;
+	client_packet packet;
+	packet.op = CLOSE;
+	packet.args.close.fd = fd;
+	if (write_client_packet(conn->socket, &packet) == -1) {
+		cout << "[mynfs_close] Write error" << endl;
+		mynfs_error = UNKNOWN;
+		return ERROR;
+	}
+	
+	server_packet recv_packet;
+	if (read_server_packet(conn->socket, &recv_packet, CLOSE) == -1) {
+		cout << "[mynfs_close] Read error" << endl;
+		mynfs_error = UNKNOWN;
+		return ERROR;
+	}
+	if (recv_packet.res != 0) {
+		cout << "[mynfs_close] Response error: " << recv_packet.res << endl;
+		mynfs_error = UNKNOWN;
+		return ERROR;
+	}
+
+	return OK;
 }
 
 int mynfs_read(mynfs_connection* conn, int fd, void *buf, int size) {
-	return ERROR;
+    
+	client_packet packet;
+	packet.op = READ;
+	packet.args.read.fd = fd;
+	packet.args.read.size = size;
+	if (write_client_packet(conn->socket, &packet) == -1) {
+		cout << "[mynfs_read] Write error" << endl;
+		mynfs_error = UNKNOWN;
+		return ERROR;
+	}
+	
+	server_packet recv_packet;
+	if (read_server_packet(conn->socket, &recv_packet, READ) == -1) {
+		cout << "[mynfs_read] Read error" << endl;
+		mynfs_error = UNKNOWN;
+		return ERROR;
+	}
+	if (recv_packet.res != 0) {
+		cout << "[mynfs_read] Response error: " << recv_packet.res << endl;
+		mynfs_error = UNKNOWN;
+		return ERROR;
+	}
+
+	return OK;
 }
 
-int mynfs_write(mynfs_connection* conn, int fd, const void *buf, int size) {
-	return ERROR;
+int mynfs_write(mynfs_connection* conn, int fd, const void *data, int size) {
+    
+	client_packet packet;
+	packet.op = WRITE;
+	packet.args.write.fd = fd;
+	packet.args.write.size = size;
+	packet.args.write.data = (char *) data;
+	if (write_client_packet(conn->socket, &packet) == -1) {
+		cout << "[mynfs_write] Write error" << endl;
+		mynfs_error = UNKNOWN;
+		return ERROR;
+	}
+	
+	server_packet recv_packet;
+	if (read_server_packet(conn->socket, &recv_packet, WRITE) == -1) {
+		cout << "[mynfs_write] Read error" << endl;
+		mynfs_error = UNKNOWN;
+		return ERROR;
+	}
+	if (recv_packet.res != 0) {
+		cout << "[mynfs_write] Response error: " << recv_packet.res << endl;
+		mynfs_error = UNKNOWN;
+		return ERROR;
+	}
+
+	return OK;
+}
+
+int mynfs_lseek(mynfs_connection* conn, int fd, int offset, int whence) {
+    
+	client_packet packet;
+	packet.op = LSEEK;
+	packet.args.lseek.fd = fd;
+	packet.args.lseek.offset = offset;
+	packet.args.lseek.whence = whence;
+	if (write_client_packet(conn->socket, &packet) == -1) {
+		cout << "[mynfs_lseek] Write error" << endl;
+		mynfs_error = UNKNOWN;
+		return ERROR;
+	}
+	
+	server_packet recv_packet;
+	if (read_server_packet(conn->socket, &recv_packet, LSEEK) == -1) {
+		cout << "[mynfs_lseek] Read error" << endl;
+		mynfs_error = UNKNOWN;
+		return ERROR;
+	}
+	if (recv_packet.res != 0) {
+		cout << "[mynfs_lseek] Response error: " << recv_packet.res << endl;
+		mynfs_error = UNKNOWN;
+		return ERROR;
+	}
+
+	return OK;
+}
+
+int mynfs_unlink(mynfs_connection* conn, const char *path) {
+    
+	client_packet packet;
+	packet.op = UNLINK;
+	packet.args.unlink.path = (char *) path;
+	if (write_client_packet(conn->socket, &packet) == -1) {
+		cout << "[mynfs_unlink] Write error" << endl;
+		mynfs_error = UNKNOWN;
+		return ERROR;
+	}
+	
+	server_packet recv_packet;
+	if (read_server_packet(conn->socket, &recv_packet, UNLINK) == -1) {
+		cout << "[mynfs_unlink] Read error" << endl;
+		mynfs_error = UNKNOWN;
+		return ERROR;
+	}
+	if (recv_packet.res != 0) {
+		cout << "[mynfs_unlink] Response error: " << recv_packet.res << endl;
+		mynfs_error = UNKNOWN;
+		return ERROR;
+	}
+
+	return OK;
+}
+
+int mynfs_opendir(mynfs_connection* conn, const char *path) {
+	cout << "Opening directory " << path << endl;
+    
+	client_packet packet;
+	packet.op = OPENDIR;
+	packet.args.opendir.path = (char *) path;
+	if (write_client_packet(conn->socket, &packet) == -1) {
+		cout << "[mynfs_opendir] Write error" << endl;
+		mynfs_error = UNKNOWN;
+		return ERROR;
+	}
+	
+	server_packet recv_packet;
+	if (read_server_packet(conn->socket, &recv_packet, OPENDIR) == -1) {
+		cout << "[mynfs_opendir] Read error" << endl;
+		mynfs_error = UNKNOWN;
+		return ERROR;
+	}
+	if (recv_packet.res != 0) {
+		cout << "[mynfs_opendir] Response error: " << recv_packet.res << endl;
+		mynfs_error = UNKNOWN;
+		return ERROR;
+	}
+
+	return recv_packet.ret.opendir.dir_fd;
+}
+
+char *mynfs_readdir(mynfs_connection* conn, int fd) {
+    
+	client_packet packet;
+	packet.op = READDIR;
+	packet.args.readdir.dir_fd = fd;
+	if (write_client_packet(conn->socket, &packet) == -1) {
+		cout << "[mynfs_readdir] Write error" << endl;
+		mynfs_error = UNKNOWN;
+		return nullptr;
+	}
+	
+	server_packet recv_packet;
+	if (read_server_packet(conn->socket, &recv_packet, READDIR) == -1) {
+		cout << "[mynfs_readdir] Read error" << endl;
+		mynfs_error = UNKNOWN;
+		return nullptr;
+	}
+	if (recv_packet.res != 0) {
+		cout << "[mynfs_readdir] Response error: " << recv_packet.res << endl;
+		mynfs_error = UNKNOWN;
+		return nullptr;
+	}
+
+	return recv_packet.ret.readdir.name;
+}
+
+int mynfs_closedir(mynfs_connection* conn, int fd) {
+    
+	client_packet packet;
+	packet.op = CLOSEDIR;
+	packet.args.closedir.dir_fd = fd;
+	if (write_client_packet(conn->socket, &packet) == -1) {
+		cout << "[mynfs_closedir] Write error" << endl;
+		mynfs_error = UNKNOWN;
+		return ERROR;
+	}
+	
+	server_packet recv_packet;
+	if (read_server_packet(conn->socket, &recv_packet, CLOSEDIR) == -1) {
+		cout << "[mynfs_closedir] Read error" << endl;
+		mynfs_error = UNKNOWN;
+		return ERROR;
+	}
+	if (recv_packet.res != 0) {
+		cout << "[mynfs_closedir] Response error: " << recv_packet.res << endl;
+		mynfs_error = UNKNOWN;
+		return ERROR;
+	}
+
+	return OK;
+}
+
+int mynfs_fstat(mynfs_connection* conn, int fd) {
+    
+	client_packet packet;
+	packet.op = FSTAT;
+	packet.args.fstat.fd = fd;
+	if (write_client_packet(conn->socket, &packet) == -1) {
+		cout << "[mynfs_fstat] Write error" << endl;
+		mynfs_error = UNKNOWN;
+		return ERROR;
+	}
+	
+	server_packet recv_packet;
+	if (read_server_packet(conn->socket, &recv_packet, FSTAT) == -1) {
+		cout << "[mynfs_fstat] Read error" << endl;
+		mynfs_error = UNKNOWN;
+		return ERROR;
+	}
+	if (recv_packet.res != 0) {
+		cout << "[mynfs_fstat] Response error: " << recv_packet.res << endl;
+		mynfs_error = UNKNOWN;
+		return ERROR;
+	}
+
+	return OK;
+}
+
+int mynfs_stat(mynfs_connection* conn, const char *path) {
+    
+	client_packet packet;
+	packet.op = STAT;
+	packet.args.stat.path = (char *) path;
+	if (write_client_packet(conn->socket, &packet) == -1) {
+		cout << "[mynfs_stat] Write error" << endl;
+		mynfs_error = UNKNOWN;
+		return ERROR;
+	}
+	
+	server_packet recv_packet;
+	if (read_server_packet(conn->socket, &recv_packet, STAT) == -1) {
+		cout << "[mynfs_stat] Read error" << endl;
+		mynfs_error = UNKNOWN;
+		return ERROR;
+	}
+	if (recv_packet.res != 0) {
+		cout << "[mynfs_stat] Response error: " << recv_packet.res << endl;
+		mynfs_error = UNKNOWN;
+		return ERROR;
+	}
+
+	return OK;
 }

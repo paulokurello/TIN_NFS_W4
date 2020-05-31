@@ -10,6 +10,7 @@
 #include <cstring>
 
 #include "packet.cpp"
+#include "queues.cpp"
 
 using namespace std;
 
@@ -91,6 +92,9 @@ int init_sock() {
 	return sock;
 }
 
+static MutexQueue<Request> request_queue;
+static MutexQueue<Response> response_queue;
+
 int main(int argc, char* argv[]) {
 	// Handle Ctrl-C to properly stop server
 	install_sighandler();
@@ -138,7 +142,20 @@ int main(int argc, char* argv[]) {
 }
 
 void *spawn_fs_thread(void *args) {
-
+	while(true) {
+		Request request;
+		while(true) {
+			auto pop = request_queue.pop();
+			if (pop) {
+				request = *pop;
+				break;
+			}
+			pthread_yield();
+		}
+		switch(request.packet.op) {
+			default: continue;
+		}
+	}
 	return nullptr;
 }
 
@@ -190,6 +207,7 @@ int check_client_pass(int sock, Users *users) {
 }
 
 void handle_client(int sock) {
+	pthread_t thread_id = pthread_self();
 	while (true) {
 		client_packet packet;
 		server_packet s_packet;
@@ -198,7 +216,9 @@ void handle_client(int sock) {
 			return;
 		}
 		switch(packet.op) {
-			case OPEN: 
+			case OPEN:
+				request_queue.push({thread_id, packet});
+				response_queue.pop();
 				s_packet.ret.open.fd = 0;
 				break;
 			case CLOSE: break;
