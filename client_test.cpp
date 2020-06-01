@@ -33,5 +33,6 @@ int main(int argc, char *argv[]) {
 		cout << "Got mynfs error on close: " << mynfs_error << endl;
 		return -1;
 	}
+	cout << "done" << endl;
 	return 0;
 }
