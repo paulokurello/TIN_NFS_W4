@@ -38,6 +38,7 @@ public:
 
 struct Request {
     pthread_t thread_id;
+    int uid;
     client_packet packet;
 };
 

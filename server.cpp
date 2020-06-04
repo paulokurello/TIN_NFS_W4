@@ -9,6 +9,7 @@
 #include <signal.h>
 #include <pthread.h>
 #include <cstring>
+#include <fcntl.h>
 
 #include "packet.cpp"
 #include "queues.cpp"
@@ -28,7 +29,7 @@ struct User {
 struct Users {
 	unordered_map<int, User> users;
 	Users(const char *file_path) {
-		ifstream file(file_path);
+		ifstream file = ifstream(file_path);
 		while(!file.eof()) {
 			int id;
 			User user;
@@ -50,7 +51,7 @@ struct Users {
 };
 
 int check_client_pass(int sock, Users *users);
-void handle_client(int sock);
+void handle_client(int sock, int uid);
 void *spawn_client_thread(void *args);
 void *spawn_fs_thread(void *args);
 
@@ -109,7 +110,7 @@ int main(int argc, char* argv[]) {
 	// Handle Ctrl-C to properly stop server
 	install_sighandler();
 
-	Users users("users");
+	Users users("users.txt");
 
 	pthread_t fs;
 	if (pthread_create(&fs, nullptr, spawn_fs_thread, nullptr) == -1)
@@ -142,7 +143,8 @@ int main(int argc, char* argv[]) {
 		}
 
 		pthread_t thread;
-		if (pthread_create(&thread, nullptr, spawn_client_thread, (void *) &peer_sock) == -1) {
+		int args[2] = {peer_sock, user_id};
+		if (pthread_create(&thread, nullptr, spawn_client_thread, (void *) &args) == -1) {
 			cout << "Error on handling client" << endl;
 		}
 	}
@@ -153,9 +155,11 @@ int main(int argc, char* argv[]) {
 
 void *spawn_fs_thread(void *args) {
 	struct FileDb {
+		// name => (uid, perms)
 		unordered_map<string, pair<int, int>> files;
+
 		FileDb(const char *file_path) {
-			ifstream file(file_path);
+			ifstream file{file_path};
 			while(!file.eof()) {
 				string name;
 				file >> name;
@@ -174,7 +178,9 @@ void *spawn_fs_thread(void *args) {
 	};
 
 	FileDb file_db("files.txt");
-	unordered_map<int, OpenFile> open_files();
+	// remote_fd => (local_fd, uid)
+	unordered_map<int, OpenFile> open_files{};
+	unsigned int counter = 1;
 
 	while(true) {
 		Request request;
@@ -186,18 +192,97 @@ void *spawn_fs_thread(void *args) {
 			}
 			pthread_yield();
 		}
+		Response response;
+		response.thread_id = request.thread_id;
+		response.packet.res = 1; // Default to error
 		switch(request.packet.op) {
-			case OPEN:
-
+			case OPEN: {
+				// TODO: Check perms
+				string path = "files/";
+				path += request.packet.args.open.path;
+				int local_fd = open(
+					path.c_str(),
+					request.packet.args.open.oflag,
+					request.packet.args.open.mode
+				);
+				if (local_fd < 0) continue;
+				int fd = counter;
+				counter += 1;
+				if (counter == 0) counter = 1;
+				open_files.insert({fd, {local_fd, request.uid}});
+				response.packet.res = 0;
+				response.packet.ret.open.fd = fd;
 				break;
+			}
+			case CLOSE: {
+				auto file = open_files.find(request.packet.args.close.fd);
+				if (file != open_files.end()) {
+					if (file->second.uid == request.uid) {
+						close(file->second.local_fd);
+						open_files.erase(file);
+						response.packet.res = 0;
+					}
+				}
+				break;
+			}
+			case READ: {
+				auto file = open_files.find(request.packet.args.close.fd);
+				if (file != open_files.end()) {
+					if (file->second.uid == request.uid) {
+						void *buf = malloc(request.packet.args.read.size);
+						int n = read(file->second.local_fd, buf, request.packet.args.read.size);
+						if (n >= 0) {
+							response.packet.res = 0;
+							response.packet.ret.read.size = n;
+							response.packet.ret.read.data = buf;
+						} 
+					}
+				}
+				break;
+			}
+			case WRITE: {
+				auto file = open_files.find(request.packet.args.close.fd);
+				if (file != open_files.end()) {
+					if (file->second.uid == request.uid) {
+						int n = write_all(
+							file->second.local_fd,
+							(const char*) request.packet.args.write.data,
+							request.packet.args.write.size
+						);
+						if (n >= 0) {
+							response.packet.res = 0;
+						} 
+					}
+				}
+				break;
+			}
+			case LSEEK: {
+				auto file = open_files.find(request.packet.args.close.fd);
+				if (file != open_files.end()) {
+					if (file->second.uid == request.uid) {
+						int n = lseek(
+							file->second.local_fd,
+							request.packet.args.lseek.offset,
+							request.packet.args.lseek.whence
+						);
+						if (n >= 0) {
+							response.packet.res = 0;
+							response.packet.ret.lseek.offset = n;
+						} 
+					}
+				}
+				break;
+			}
 			default: continue;
 		}
+		response_queue.push(response);
 	}
 	return nullptr;
 }
 
-void *spawn_client_thread(void *args) {
-	handle_client(*(int *)args);
+void *spawn_client_thread(void *vargs) {
+	int *args = (int *) vargs;
+	handle_client(args[0], args[1]);
 	return nullptr;
 }
 
@@ -217,6 +302,7 @@ int check_client_pass(int sock, Users *users) {
 	s_packet.res = (uint8_t) -1;
 	int id = 0;
 	if (auto oid = users->has(packet.args.connect.login, packet.args.connect.password)) {
+		s_packet.res = 0;
 		id = *oid;
 	}
 
@@ -233,7 +319,7 @@ int check_client_pass(int sock, Users *users) {
 	return id;
 }
 
-void handle_client(int sock) {
+void handle_client(int sock, int uid) {
 	pthread_t thread_id = pthread_self();
 	while (true) {
 		client_packet packet;
@@ -250,16 +336,19 @@ void handle_client(int sock) {
 			case READ:
 			case WRITE:
 			case LSEEK:
-				request_queue.push({thread_id, packet});
+				request_queue.push({thread_id, uid, packet});
 				Response response;
 				while(true) {
-					auto pop = response_queue.remove([thread_id](Response req){ return req.thread_id == thread_id; });
+					auto pop = response_queue.remove([thread_id](Response req){
+						return req.thread_id == thread_id;
+					});
 					if (pop) {
 						response = *pop;
 						break;
 					}
 					pthread_yield();
 				}
+				s_packet = response.packet;
 				break;
 			case UNLINK: break;
 			case OPENDIR: break;

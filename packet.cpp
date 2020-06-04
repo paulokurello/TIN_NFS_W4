@@ -7,7 +7,7 @@
 
 using namespace std;
 
-#define try(op, msg) {\
+#define try_op(op, msg) {\
 	if ((op) == -1) {\
 		cout << (msg) << endl;\
 		return -1;\
@@ -20,11 +20,11 @@ int read_to_end(int sock, char *buf, int size) {
 	int left = size;
 	while (left > 0) {
 		int n = read(sock, buf, left);
-		if (n == 0) return 0;
+		if (n == 0) return -1;
 		if (n < 0) {
-			cout << strerror(errno) << endl;
+			cout << "read_to_end error: " << strerror(errno) << endl;
 			return -1;
-		} 
+		}
 		left -= n;
 		buf += n;
 	}
@@ -35,9 +35,9 @@ int write_all(int sock, const char *buf, int size) {
 	int left = size;
 	while (left > 0) {
 		int n = write(sock, buf, left);
-		if (n == 0) return 0;
+		if (n == 0) return -1;
 		if (n < 0) {
-			cout << strerror(errno) << endl;
+			cout << "write_all error: " << strerror(errno) << endl;
 			return -1;
 		} 
 		left -= n;
@@ -105,52 +105,52 @@ int read_client_packet(int sock, client_packet *packet) {
 	cout << "Size: " << size << endl;
 	// if (size > 128) return -1;
 
-	try(read_to_end(sock, (char *) &packet->op, 1), "Reading op error");
+	try_op(read_to_end(sock, (char *) &packet->op, 1), "Reading op error");
 	switch (packet->op) {
 		case CONNECT:
-			try(read_string(sock, &packet->args.connect.login), "Reading login error");
-			try(read_string(sock, &packet->args.connect.password), "Reading password error");
+			try_op(read_string(sock, &packet->args.connect.login), "Reading login error");
+			try_op(read_string(sock, &packet->args.connect.password), "Reading password error");
 			break;
 		case OPEN:
-			try(read_string(sock, &packet->args.open.path), "Reading open path");
-			try(read_u32(sock, &packet->args.open.oflag), "Reading open flag error");
-			try(read_u32(sock, &packet->args.open.mode), "Reading open mode error");
+			try_op(read_string(sock, &packet->args.open.path), "Reading open path");
+			try_op(read_u32(sock, &packet->args.open.oflag), "Reading open flag error");
+			try_op(read_u32(sock, &packet->args.open.mode), "Reading open mode error");
 			break;
 		case CLOSE:
-			try(read_u32(sock, &packet->args.close.fd), "Reading close fd error");
+			try_op(read_u32(sock, &packet->args.close.fd), "Reading close fd error");
 			break;
 		case READ:
-			try(read_u32(sock, &packet->args.read.fd), "Reading read fd error");
-			try(read_u32(sock, &packet->args.read.size), "Reading read size error");
+			try_op(read_u32(sock, &packet->args.read.fd), "Reading read fd error");
+			try_op(read_u32(sock, &packet->args.read.size), "Reading read size error");
 			break;
 		case WRITE:
-			try(read_u32(sock, &packet->args.write.fd), "Reading write fd error");
-			try(read_u32(sock, &packet->args.write.size), "Reading write size error");
+			try_op(read_u32(sock, &packet->args.write.fd), "Reading write fd error");
+			try_op(read_u32(sock, &packet->args.write.size), "Reading write size error");
 			packet->args.write.data = malloc(packet->args.write.size);
-			try(read_to_end(sock, (char *) &packet->args.write.data, packet->args.write.size), "Reading write data error");
+			try_op(read_to_end(sock, (char *) packet->args.write.data, packet->args.write.size), "Reading write data error");
 			break;
 		case LSEEK:
-			try(read_u32(sock, &packet->args.lseek.fd), "Reading lseek fd error");
-			try(read_u32(sock, &packet->args.lseek.offset), "Reading lseek offset error");
-			try(read_u32(sock, &packet->args.lseek.whence), "Reading lseek whence error");
+			try_op(read_u32(sock, &packet->args.lseek.fd), "Reading lseek fd error");
+			try_op(read_u32(sock, &packet->args.lseek.offset), "Reading lseek offset error");
+			try_op(read_u32(sock, &packet->args.lseek.whence), "Reading lseek whence error");
 			break;
 		case UNLINK:
-			try(read_string(sock, &packet->args.unlink.path), "Reading unlink path");
+			try_op(read_string(sock, &packet->args.unlink.path), "Reading unlink path");
 			break;
 		case OPENDIR:
-			try(read_string(sock, &packet->args.opendir.path), "Reading opendir path");
+			try_op(read_string(sock, &packet->args.opendir.path), "Reading opendir path");
 			break;
 		case READDIR:
-			try(read_u32(sock, &packet->args.readdir.dir_fd), "Reading readdir dir_fd error");
+			try_op(read_u32(sock, &packet->args.readdir.dir_fd), "Reading readdir dir_fd error");
 			break;
 		case CLOSEDIR:
-			try(read_u32(sock, &packet->args.closedir.dir_fd), "Reading closedir dir_fd error");
+			try_op(read_u32(sock, &packet->args.closedir.dir_fd), "Reading closedir dir_fd error");
 			break;
 		case FSTAT:
-			try(read_u32(sock, &packet->args.fstat.fd), "Reading fstat fd error");
+			try_op(read_u32(sock, &packet->args.fstat.fd), "Reading fstat fd error");
 			break;
 		case STAT:
-			try(read_string(sock, &packet->args.stat.path), "Reading stat path");
+			try_op(read_string(sock, &packet->args.stat.path), "Reading stat path");
 			break;
 		case KEEPALIVE: break;
 		default:
@@ -186,38 +186,39 @@ uint32_t server_packet_size(const server_packet *packet, int op) {
 
 int read_server_packet(int sock, server_packet *packet, int op) {
 	uint32_t size;
-	try(read_u32(sock, &size), "Reading size error");
+	try_op(read_u32(sock, &size), "Reading size error");
 
 	uint8_t res;
-	try(read_to_end(sock, (char *) &res, 1), "Reading res error");
+	try_op(read_to_end(sock, (char *) &res, 1), "Reading res error");
 	switch (op) {
 		case CONNECT: break;
 		case OPEN:
-			try(read_u32(sock, &packet->ret.open.fd), "Reading open fd error");
+			try_op(read_u32(sock, &packet->ret.open.fd), "Reading open fd error");
 			break;
 		case CLOSE: break;
 		case READ:
-			try(read_u32(sock, &packet->ret.read.size), "Reading read size error");
+			try_op(read_u32(sock, &packet->ret.read.size), "Reading read size error");
 			packet->ret.read.data = malloc(packet->ret.read.size);
-			try(read_to_end(sock, (char *) &packet->ret.read.data, packet->ret.read.size), "Reading read data error");
+			if (packet->ret.read.data == nullptr) return -1;
+			try_op(read_to_end(sock, (char *) packet->ret.read.data, packet->ret.read.size), "Reading read data error");
 			break;
 		case WRITE: break;
 		case LSEEK:
-			try(read_u32(sock, &packet->ret.lseek.offset), "Reading lseek offset error");
+			try_op(read_u32(sock, &packet->ret.lseek.offset), "Reading lseek offset error");
 			break;
 		case UNLINK: break;
 		case OPENDIR:
-			try(read_u32(sock, &packet->ret.opendir.dir_fd), "Reading opendir dir_fd error");
+			try_op(read_u32(sock, &packet->ret.opendir.dir_fd), "Reading opendir dir_fd error");
 			break;
 		case READDIR:
-			try(read_string(sock, &packet->ret.readdir.name), "Reading readdir name error");
+			try_op(read_string(sock, &packet->ret.readdir.name), "Reading readdir name error");
 			break;
 		case CLOSEDIR: break;
 		case FSTAT:
-			try(read_stat(sock, &packet->ret.fstat.stat), "Reading fstat stat error");
+			try_op(read_stat(sock, &packet->ret.fstat.stat), "Reading fstat stat error");
 			break;
 		case STAT:
-			try(read_stat(sock, &packet->ret.stat.stat), "Reading stat stat error");
+			try_op(read_stat(sock, &packet->ret.stat.stat), "Reading stat stat error");
 			break;
 		case KEEPALIVE: break;
 		default:
@@ -259,48 +260,48 @@ int write_client_packet(int sock, const client_packet *packet) {
 	if (write_all(sock, (const char *) &op, 1) == -1) return -1;
 	switch (op) {
 		case CONNECT:
-			try(write_string(sock, packet->args.connect.login), "Writing connect login error");
-			try(write_string(sock, packet->args.connect.password), "Writing connect password error");
+			try_op(write_string(sock, packet->args.connect.login), "Writing connect login error");
+			try_op(write_string(sock, packet->args.connect.password), "Writing connect password error");
 			break;
 		case OPEN:
-			try(write_string(sock, packet->args.open.path), "Writing open path error");
-			try(write_u32(sock, packet->args.open.oflag), "Writing open oflag error");
-			try(write_u32(sock, packet->args.open.mode), "Writing open mode error");
+			try_op(write_string(sock, packet->args.open.path), "Writing open path error");
+			try_op(write_u32(sock, packet->args.open.oflag), "Writing open oflag error");
+			try_op(write_u32(sock, packet->args.open.mode), "Writing open mode error");
 			break;
 		case CLOSE:
-			try(write_u32(sock, packet->args.close.fd), "Writing close fd error");
+			try_op(write_u32(sock, packet->args.close.fd), "Writing close fd error");
 			break;
 		case READ:
-			try(write_u32(sock, packet->args.read.fd), "Writing read fd error");
-			try(write_u32(sock, packet->args.read.size), "Writing read size error");
+			try_op(write_u32(sock, packet->args.read.fd), "Writing read fd error");
+			try_op(write_u32(sock, packet->args.read.size), "Writing read size error");
 			break;
 		case WRITE:
-			try(write_u32(sock, packet->args.write.fd), "Writing write fd error");
-			try(write_u32(sock, packet->args.write.size), "Writing write size error");
-			try(write_all(sock, (const char *) &packet->args.write.data, packet->args.write.size), "Writing write data error");
+			try_op(write_u32(sock, packet->args.write.fd), "Writing write fd error");
+			try_op(write_u32(sock, packet->args.write.size), "Writing write size error");
+			try_op(write_all(sock, (const char *) packet->args.write.data, packet->args.write.size), "Writing write data error");
 			break;
 		case LSEEK:
-			try(write_u32(sock, packet->args.lseek.fd), "Writing lseek fd error");
-			try(write_u32(sock, packet->args.lseek.offset), "Writing lseek offset error");
-			try(write_u32(sock, packet->args.lseek.whence), "Writing lseek whence error");
+			try_op(write_u32(sock, packet->args.lseek.fd), "Writing lseek fd error");
+			try_op(write_u32(sock, packet->args.lseek.offset), "Writing lseek offset error");
+			try_op(write_u32(sock, packet->args.lseek.whence), "Writing lseek whence error");
 			break;
 		case UNLINK:
-			try(write_string(sock, packet->args.unlink.path), "Writing unlink path error");
+			try_op(write_string(sock, packet->args.unlink.path), "Writing unlink path error");
 			break;
 		case OPENDIR:
-			try(write_string(sock, packet->args.opendir.path), "Writing opendir path error");
+			try_op(write_string(sock, packet->args.opendir.path), "Writing opendir path error");
 			break;
 		case READDIR:
-			try(write_u32(sock, packet->args.readdir.dir_fd), "Writing readdir dir_fd error");
+			try_op(write_u32(sock, packet->args.readdir.dir_fd), "Writing readdir dir_fd error");
 			break;
 		case CLOSEDIR:
-			try(write_u32(sock, packet->args.closedir.dir_fd), "Writing closedir dir_fd error");
+			try_op(write_u32(sock, packet->args.closedir.dir_fd), "Writing closedir dir_fd error");
 			break;
 		case FSTAT:
-			try(write_u32(sock, packet->args.fstat.fd), "Writing fstat fd error");
+			try_op(write_u32(sock, packet->args.fstat.fd), "Writing fstat fd error");
 			break;
 		case STAT:
-			try(write_string(sock, packet->args.stat.path), "Writing stat path error");
+			try_op(write_string(sock, packet->args.stat.path), "Writing stat path error");
 			break;
 		case KEEPALIVE: break;
 		default:
@@ -320,30 +321,30 @@ int write_server_packet(int sock, const server_packet *packet, int op) {
 	switch (op) {
 		case CONNECT: break;
 		case OPEN: 
-			try(write_u32(sock, packet->ret.open.fd), "Writing open fd error");
+			try_op(write_u32(sock, packet->ret.open.fd), "Writing open fd error");
 			break;
 		case CLOSE: break;
 		case READ: 
-			try(write_u32(sock, packet->ret.read.size), "Writing read size error");
-			try(write_all(sock, (const char *) packet->ret.read.data, packet->ret.read.size), "Writing read data error");
+			try_op(write_u32(sock, packet->ret.read.size), "Writing read size error");
+			try_op(write_all(sock, (const char *) packet->ret.read.data, packet->ret.read.size), "Writing read data error");
 			break;
 		case WRITE: break;
 		case LSEEK: 
-			try(write_u32(sock, packet->ret.lseek.offset), "Writing lseek offset error");
+			try_op(write_u32(sock, packet->ret.lseek.offset), "Writing lseek offset error");
 			break;
 		case UNLINK: break;
 		case OPENDIR: 
-			try(write_u32(sock, packet->ret.opendir.dir_fd), "Writing opendir dir_fd error");
+			try_op(write_u32(sock, packet->ret.opendir.dir_fd), "Writing opendir dir_fd error");
 			break;
 		case READDIR: 
-			try(write_string(sock, packet->ret.readdir.name), "Writing readdir name error");
+			try_op(write_string(sock, packet->ret.readdir.name), "Writing readdir name error");
 			break;
 		case CLOSEDIR: break;
 		case FSTAT: 
-			try(write_stat(sock, packet->ret.fstat.stat), "Writing fstat stat error");
+			try_op(write_stat(sock, packet->ret.fstat.stat), "Writing fstat stat error");
 			break;
 		case STAT: 
-			try(write_stat(sock, packet->ret.stat.stat), "Writing stat stat error");
+			try_op(write_stat(sock, packet->ret.stat.stat), "Writing stat stat error");
 			break;
 		case KEEPALIVE: break;
 		default:
