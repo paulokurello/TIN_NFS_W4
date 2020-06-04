@@ -1,4 +1,3 @@
 mkdir -p build
-cd build
-cmake ..
-cmake --build .
+cmake -B build
+cmake --build build
