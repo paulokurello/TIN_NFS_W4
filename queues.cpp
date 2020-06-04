@@ -25,7 +25,7 @@ public:
     template <typename F>
     std::optional<T> remove(F f) {
         std::scoped_lock lock(this->mutex);
-        for (auto i : this->vector) {
+        for (auto i = this->vector.begin(); i != this->vector.end(); ++i) {
             if (f(*i)) {
                 T t = *i;
                 this->vector.erase(i);

@@ -16,6 +16,7 @@ int main(int argc, char *argv[]) {
 		cout << "Got mynfs error on open: " << mynfs_error << endl;
 		return -1;
 	}
+	cout << "Got fd: " << fd << endl;
 	char buf[256] = {0};
 	int size;
 	if ((size = mynfs_read(conn, fd, buf, sizeof(buf))) == -1) {
@@ -23,7 +24,7 @@ int main(int argc, char *argv[]) {
 		return -1;
 	}
 	cout << "Got " << size << " bytes: " << buf << endl;
-	strcpy(buf, "test");
+	memcpy(buf, "test", 4);
 	if (mynfs_write(conn, fd, buf, 4) == -1) {
 		cout << "Got mynfs error on write: " << mynfs_error << endl;
 		return -1;

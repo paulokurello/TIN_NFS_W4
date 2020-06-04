@@ -1,6 +1,8 @@
 #ifndef PACKET_H
 #define PACKET_H
 
+#include <stdint.h>
+
 enum op_code {
 	CONNECT = 1,
 	OPEN = 2,

@@ -1,6 +1,7 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
+#include <unordered_map>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/ip.h>
@@ -20,22 +21,31 @@ void error(const char *msg, int code) {
 }
 
 struct User {
-	int id;
 	string name;
 	string password;
 };
 
 struct Users {
-	vector<User> users;
+	unordered_map<int, User> users;
 	Users(const char *file_path) {
 		ifstream file(file_path);
 		while(!file.eof()) {
+			int id;
 			User user;
-			file >> user.id;
+			file >> id;
 			file >> user.name;
 			file >> user.password;
-			this->users.push_back(user);
+			this->users.insert({id, user});
 		}
+	}
+
+	optional<int> has(string login, string password) {
+		for (auto &[id, user] : this->users) {
+			if (user.name == login && user.password == password) {
+				return id;
+			}
+		}
+		return nullopt;
 	}
 };
 
@@ -142,6 +152,30 @@ int main(int argc, char* argv[]) {
 }
 
 void *spawn_fs_thread(void *args) {
+	struct FileDb {
+		unordered_map<string, pair<int, int>> files;
+		FileDb(const char *file_path) {
+			ifstream file(file_path);
+			while(!file.eof()) {
+				string name;
+				file >> name;
+				int uid;
+				file >> uid;
+				int perms;
+				file >> perms;
+				this->files.insert({name, {uid, perms}});
+			}
+		}
+	};
+
+	struct OpenFile {
+		int local_fd;
+		int uid;
+	};
+
+	FileDb file_db("files.txt");
+	unordered_map<int, OpenFile> open_files();
+
 	while(true) {
 		Request request;
 		while(true) {
@@ -153,6 +187,9 @@ void *spawn_fs_thread(void *args) {
 			pthread_yield();
 		}
 		switch(request.packet.op) {
+			case OPEN:
+
+				break;
 			default: continue;
 		}
 	}
@@ -179,22 +216,12 @@ int check_client_pass(int sock, Users *users) {
 	server_packet s_packet;
 	s_packet.res = (uint8_t) -1;
 	int id = 0;
-	for (User &user : users->users) {
-		if (user.name == packet.args.connect.login) {
-			if (user.password == packet.args.connect.password) {
-				s_packet.res = 0;
-				id = user.id;
-				break;
-			} else {
-				cout << "Invalid password for " << packet.args.connect.login << endl;
-				id = -1;
-				break;
-			}
-		}
+	if (auto oid = users->has(packet.args.connect.login, packet.args.connect.password)) {
+		id = *oid;
 	}
 
 	if (id == 0) {
-		cout << "Unknown user: " << packet.args.connect.login << endl;
+		cout << "Invalid login info for: " << packet.args.connect.login << endl;
 		id = -1;
 	}
 
@@ -211,20 +238,29 @@ void handle_client(int sock) {
 	while (true) {
 		client_packet packet;
 		server_packet s_packet;
+		cout << "Receiving... ";
 		if(read_client_packet(sock, &packet) == -1) {
 			cout << "[handle_client] Read error" << endl;
 			return;
 		}
+		cout << "ok" << endl;
 		switch(packet.op) {
 			case OPEN:
+			case CLOSE:
+			case READ:
+			case WRITE:
+			case LSEEK:
 				request_queue.push({thread_id, packet});
-				response_queue.pop();
-				s_packet.ret.open.fd = 0;
+				Response response;
+				while(true) {
+					auto pop = response_queue.remove([thread_id](Response req){ return req.thread_id == thread_id; });
+					if (pop) {
+						response = *pop;
+						break;
+					}
+					pthread_yield();
+				}
 				break;
-			case CLOSE: break;
-			case READ: break;
-			case WRITE: break;
-			case LSEEK: break;
 			case UNLINK: break;
 			case OPENDIR: break;
 			case READDIR: break;
@@ -235,13 +271,15 @@ void handle_client(int sock) {
 				s_packet.res = 0;
 				break;
 			default:
-				cout << "[handle_client] Invalid op" << packet.op << endl;
+				cout << "[handle_client] Invalid op" << (int) packet.op << endl;
 				return;
 		}
+		cout << "Sending " << (int) packet.op << "... ";
 		if (write_server_packet(sock, &s_packet, packet.op) == -1) {
 			cout << "[handle_client] Write error" << endl;
 			return;
 		}
+		cout << "ok" << endl;
 	}
 	return;
 }

@@ -120,7 +120,7 @@ int mynfs_close(mynfs_connection* conn, int fd) {
 	return OK;
 }
 
-int mynfs_read(mynfs_connection* conn, int fd, void *buf, int size) {
+int mynfs_read(mynfs_connection* conn, int fd, char *buf, int size) {
     
 	client_packet packet;
 	packet.op = READ;
@@ -139,15 +139,16 @@ int mynfs_read(mynfs_connection* conn, int fd, void *buf, int size) {
 		return ERROR;
 	}
 	if (recv_packet.res != 0) {
-		cout << "[mynfs_read] Response error: " << recv_packet.res << endl;
+		cout << "[mynfs_read] Response error: " << (int) recv_packet.res << endl;
 		mynfs_error = UNKNOWN;
 		return ERROR;
 	}
+	memcpy(buf, &recv_packet.ret.read.data, recv_packet.ret.read.size);
 
-	return OK;
+	return recv_packet.ret.read.size;
 }
 
-int mynfs_write(mynfs_connection* conn, int fd, const void *data, int size) {
+int mynfs_write(mynfs_connection* conn, int fd, const char *data, int size) {
     
 	client_packet packet;
 	packet.op = WRITE;
@@ -256,7 +257,7 @@ int mynfs_opendir(mynfs_connection* conn, const char *path) {
 	return recv_packet.ret.opendir.dir_fd;
 }
 
-char *mynfs_readdir(mynfs_connection* conn, int fd) {
+const char *mynfs_readdir(mynfs_connection* conn, int fd) {
     
 	client_packet packet;
 	packet.op = READDIR;
