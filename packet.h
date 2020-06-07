@@ -16,7 +16,7 @@ enum op_code {
 	CLOSEDIR = 10,
 	FSTAT = 11,
 	STAT = 12,
-	KEEPALIVE = 13,
+	DISCONNECT = 13,
 };
 
 enum errorcode {
@@ -79,7 +79,7 @@ struct client_packet {
 		struct {
 			char *path;
 		} stat;
-		struct {} keepalive;
+		struct {} disconnect;
 	} args;
 };
 
@@ -113,7 +113,7 @@ struct server_packet {
 		struct {
 			fd_stat stat;
 		} stat;
-		struct {} keepalive;
+		struct {} disconnect;
 	} ret;
 };
 

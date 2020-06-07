@@ -321,7 +321,8 @@ int check_client_pass(int sock, Users *users) {
 
 void handle_client(int sock, int uid) {
 	pthread_t thread_id = pthread_self();
-	while (true) {
+	bool running = true;
+	while (running) {
 		client_packet packet;
 		server_packet s_packet;
 		cout << "Receiving... ";
@@ -356,8 +357,11 @@ void handle_client(int sock, int uid) {
 			case CLOSEDIR: break;
 			case FSTAT: break;
 			case STAT: break;
-			case KEEPALIVE:
 				s_packet.res = 0;
+				break;
+			case DISCONNECT:
+				s_packet.res = 0;
+				running = false;
 				break;
 			default:
 				cout << "[handle_client] Invalid op" << (int) packet.op << endl;

@@ -19,6 +19,8 @@ static int mynfs_error = NONE;
 
 int mynfs_connect(mynfs_connection** conn,
 	const char *host, const char *login, const char *password);
+int mynfs_disconnect(mynfs_connection *conn);
+
 int mynfs_open(mynfs_connection* conn,
 	const char *path, int oflag, int mode);
 int mynfs_close(mynfs_connection* conn, int fd);

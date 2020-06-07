@@ -67,6 +67,30 @@ int mynfs_connect(mynfs_connection** connection, const char *host, const char *l
 	return OK;
 }
 
+int mynfs_disconnect(mynfs_connection* conn) {
+	client_packet packet;
+	packet.op = DISCONNECT;
+	if (write_client_packet(conn->socket, &packet) == -1) {
+		cout << "[mynfs_open] Write error" << endl;
+		mynfs_error = UNKNOWN;
+		return ERROR;
+	}
+	
+	server_packet recv_packet;
+	if (read_server_packet(conn->socket, &recv_packet, DISCONNECT) == -1) {
+		cout << "[mynfs_open] Read error" << endl;
+		mynfs_error = UNKNOWN;
+		return ERROR;
+	}
+	if (recv_packet.res != 0) {
+		cout << "[mynfs_open] Response error: " << (int) recv_packet.res << endl;
+		mynfs_error = UNKNOWN;
+		return ERROR;
+	}
+
+	return recv_packet.ret.open.fd;
+}
+
 int mynfs_open(mynfs_connection* conn, const char *path, int oflag, int mode) {
     cout << "Opening file " << path << endl;
     

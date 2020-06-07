@@ -93,7 +93,7 @@ uint32_t client_packet_size(const client_packet *packet) {
 		case CLOSEDIR: return 1 + 4;
 		case FSTAT: return 1 + 4;
 		case STAT: return 1 + string_size(packet->args.stat.path);
-		case KEEPALIVE: return 1;
+		case DISCONNECT: return 1;
 		default: return (uint32_t) -1;
 	}
 }
@@ -152,7 +152,7 @@ int read_client_packet(int sock, client_packet *packet) {
 		case STAT:
 			try_op(read_string(sock, &packet->args.stat.path), "Reading stat path");
 			break;
-		case KEEPALIVE: break;
+		case DISCONNECT: break;
 		default:
 			cout << "[read_client_packet] Unknown op: " << (int) packet->op << endl;
 			return -1;
@@ -178,7 +178,7 @@ uint32_t server_packet_size(const server_packet *packet, int op) {
 		case CLOSEDIR: return 1;
 		case FSTAT: return 1 + sizeof(fd_stat);
 		case STAT: return 1 + sizeof(fd_stat);
-		case KEEPALIVE: return 1;
+		case DISCONNECT: return 1;
 		default: return (uint32_t) -1;
 	}
 	return (uint32_t) -1;
@@ -220,7 +220,7 @@ int read_server_packet(int sock, server_packet *packet, int op) {
 		case STAT:
 			try_op(read_stat(sock, &packet->ret.stat.stat), "Reading stat stat error");
 			break;
-		case KEEPALIVE: break;
+		case DISCONNECT: break;
 		default:
 			cout << "[read_server_packet] Unknown op: " << (int) op << endl;
 			return -1;
@@ -303,7 +303,7 @@ int write_client_packet(int sock, const client_packet *packet) {
 		case STAT:
 			try_op(write_string(sock, packet->args.stat.path), "Writing stat path error");
 			break;
-		case KEEPALIVE: break;
+		case DISCONNECT: break;
 		default:
 			return -1;
 	}
@@ -346,7 +346,7 @@ int write_server_packet(int sock, const server_packet *packet, int op) {
 		case STAT: 
 			try_op(write_stat(sock, packet->ret.stat.stat), "Writing stat stat error");
 			break;
-		case KEEPALIVE: break;
+		case DISCONNECT: break;
 		default:
 			return -1;
 	}
