@@ -2,6 +2,7 @@
 #define PACKET_H
 
 #include <stdint.h>
+#include <fcntl.h>
 
 enum op_code {
 	CONNECT = 1,
@@ -23,6 +24,17 @@ enum errorcode {
     NONE = 0,
     UNKNOWN = 1,
     INVALID_ARGUMENTS = 2,
+};
+
+enum oflags {
+	OF_RDONLY = O_RDONLY,
+	OF_WRONLY = O_WRONLY,
+	OF_RDWR = O_RDWR,
+	OF_APPEND = O_APPEND,
+	OF_CREAT = O_CREAT,
+	OF_EXCL = O_EXCL,
+	OF_TRUNC = O_TRUNC,
+	OF_LEGAL = OF_RDONLY | OF_WRONLY | OF_RDWR | OF_APPEND | OF_CREAT | OF_EXCL | OF_TRUNC
 };
 
 struct fd_stat {

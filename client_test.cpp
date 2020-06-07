@@ -11,9 +11,26 @@ int main(int argc, char *argv[]) {
 		cout << "Got mynfs error on connection: " << mynfs_error << endl;
 		return -1;
 	}
+	cout << "Listing files" << endl;
+	int dir_fd;
+	if ((dir_fd = mynfs_opendir(conn, "/")) == -1) {
+		cout << "Got mynfs error on opendir: " << mynfs_error << endl;
+		return -1;
+	}
+	while(true) {
+		const char *name;
+		if ((name = mynfs_readdir(conn, dir_fd)) == nullptr) {
+			break;
+		}
+		cout << name << endl;
+	}
+	if (mynfs_closedir(conn, dir_fd) == -1) {
+		cout << "Got mynfs error on closedir: " << mynfs_error << endl;
+		return -1;
+	}
 	cout << "Opening" << endl;
 	int fd;
-	if ((fd = mynfs_open(conn, "test.txt", O_RDWR, 0)) == -1) {
+	if ((fd = mynfs_open(conn, "test.txt", OF_RDWR, 0)) == -1) {
 		cout << "Got mynfs error on open: " << mynfs_error << endl;
 		return -1;
 	}
@@ -47,6 +64,11 @@ int main(int argc, char *argv[]) {
 	cout << "Closing" << endl;
 	if (mynfs_close(conn, fd) == -1) {
 		cout << "Got mynfs error on close: " << mynfs_error << endl;
+		return -1;
+	}
+	cout << "Disconnecting" << endl;
+	if (mynfs_disconnect(conn) == -1) {
+		cout << "Got mynfs error on disconnect: " << mynfs_error << endl;
 		return -1;
 	}
 	cout << "done" << endl;

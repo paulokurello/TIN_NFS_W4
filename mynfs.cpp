@@ -17,8 +17,6 @@ int mynfs_connect(mynfs_connection** connection, const char *host, const char *l
 	*connection = (mynfs_connection *) malloc(sizeof(mynfs_connection));
 	mynfs_connection* conn = *connection;
 	mynfs_error = 3;
-	cout << "Connecting to " << host << endl;
-
 	conn->socket = socket(AF_INET, SOCK_STREAM, 0);
 	if (conn->socket == -1) {
 		perror("[mynfs_connection] Socket error");
@@ -57,7 +55,6 @@ int mynfs_connect(mynfs_connection** connection, const char *host, const char *l
 		mynfs_error = UNKNOWN;
 		return ERROR;
 	}
-	cout << "Res: " << (int) recv_packet.res << endl;
 	if (recv_packet.res != 0) {
 		cout << "[mynfs_connection] Response error: " << (int) recv_packet.res << endl;
 		mynfs_error = UNKNOWN;
@@ -92,9 +89,7 @@ int mynfs_disconnect(mynfs_connection* conn) {
 }
 
 int mynfs_open(mynfs_connection* conn, const char *path, int oflag, int mode) {
-    cout << "Opening file " << path << endl;
-    
-	client_packet packet;
+    client_packet packet;
 	packet.op = OPEN;
 	packet.args.open.path = (char *) path;
 	packet.args.open.oflag = oflag;

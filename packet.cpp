@@ -55,7 +55,6 @@ int read_u32(int sock, uint32_t *value) {
 int read_string(int sock, char **str) {
 	uint32_t size;
 	if (read_u32(sock, &size) == -1) return -1;
-	cout << "Reading " << size << " bytes" << endl;
 	*str = (char *) malloc(size + 1);
 	if (read_to_end(sock, *str, size) == -1) return -1;
 	(*str)[size] = 0;
@@ -102,9 +101,6 @@ int read_client_packet(int sock, client_packet *packet) {
 	uint32_t size;
 	if (read_u32(sock, &size) == -1) return -1;
 
-	cout << "Size: " << size << endl;
-	// if (size > 128) return -1;
-
 	try_op(read_to_end(sock, (char *) &packet->op, 1), "Reading op error");
 	switch (packet->op) {
 		case CONNECT:
@@ -114,6 +110,7 @@ int read_client_packet(int sock, client_packet *packet) {
 		case OPEN:
 			try_op(read_string(sock, &packet->args.open.path), "Reading open path");
 			try_op(read_u32(sock, &packet->args.open.oflag), "Reading open flag error");
+			packet->args.open.oflag &= OF_LEGAL;
 			try_op(read_u32(sock, &packet->args.open.mode), "Reading open mode error");
 			break;
 		case CLOSE:
@@ -265,7 +262,7 @@ int write_client_packet(int sock, const client_packet *packet) {
 			break;
 		case OPEN:
 			try_op(write_string(sock, packet->args.open.path), "Writing open path error");
-			try_op(write_u32(sock, packet->args.open.oflag), "Writing open oflag error");
+			try_op(write_u32(sock, packet->args.open.oflag & OF_LEGAL), "Writing open oflag error");
 			try_op(write_u32(sock, packet->args.open.mode), "Writing open mode error");
 			break;
 		case CLOSE:

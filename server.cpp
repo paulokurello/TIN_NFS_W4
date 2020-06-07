@@ -10,6 +10,7 @@
 #include <pthread.h>
 #include <cstring>
 #include <fcntl.h>
+#include <dirent.h>
 
 #include "packet.cpp"
 #include "queues.cpp"
@@ -29,7 +30,7 @@ struct User {
 struct Users {
 	unordered_map<int, User> users;
 	Users(const char *file_path) {
-		ifstream file = ifstream(file_path);
+		ifstream file{file_path};
 		while(!file.eof()) {
 			int id;
 			User user;
@@ -177,10 +178,17 @@ void *spawn_fs_thread(void *args) {
 		int uid;
 	};
 
+	struct OpenDir {
+		DIR *local_dir_fd;
+		int uid;
+	};
+
 	FileDb file_db("files.txt");
 	// remote_fd => (local_fd, uid)
 	unordered_map<int, OpenFile> open_files{};
 	unsigned int counter = 1;
+	unordered_map<int, OpenDir> open_dirs{};
+	unsigned int dir_counter = 1;
 
 	while(true) {
 		Request request;
@@ -226,7 +234,7 @@ void *spawn_fs_thread(void *args) {
 				break;
 			}
 			case READ: {
-				auto file = open_files.find(request.packet.args.close.fd);
+				auto file = open_files.find(request.packet.args.read.fd);
 				if (file != open_files.end()) {
 					if (file->second.uid == request.uid) {
 						void *buf = malloc(request.packet.args.read.size);
@@ -241,7 +249,7 @@ void *spawn_fs_thread(void *args) {
 				break;
 			}
 			case WRITE: {
-				auto file = open_files.find(request.packet.args.close.fd);
+				auto file = open_files.find(request.packet.args.write.fd);
 				if (file != open_files.end()) {
 					if (file->second.uid == request.uid) {
 						int n = write_all(
@@ -257,7 +265,7 @@ void *spawn_fs_thread(void *args) {
 				break;
 			}
 			case LSEEK: {
-				auto file = open_files.find(request.packet.args.close.fd);
+				auto file = open_files.find(request.packet.args.lseek.fd);
 				if (file != open_files.end()) {
 					if (file->second.uid == request.uid) {
 						int n = lseek(
@@ -271,6 +279,46 @@ void *spawn_fs_thread(void *args) {
 						} 
 					}
 				}
+				break;
+			}
+			case OPENDIR: {
+				// TODO: Check perms
+				string path = "files/";
+				path += request.packet.args.opendir.path;
+				DIR *local_dir_fd = opendir(path.c_str());
+				if (local_dir_fd == nullptr) continue;
+				int dir_fd = dir_counter;
+				dir_counter += 1;
+				if (dir_counter == 0) dir_counter = 1;
+				open_dirs.insert({dir_fd, {local_dir_fd, request.uid}});
+				response.packet.res = 0;
+				response.packet.ret.opendir.dir_fd = dir_fd;
+				break;
+			}
+			case READDIR: {
+				auto dir = open_dirs.find(request.packet.args.readdir.dir_fd);
+				if (dir != open_dirs.end()) {
+					if (dir->second.uid == request.uid) {
+						auto entry = readdir(dir->second.local_dir_fd);
+						response.packet.res = 0;
+						response.packet.ret.readdir.name = entry ? entry->d_name : nullptr;
+					}
+				}
+				break;
+			}
+			case CLOSEDIR: {
+				auto dir = open_dirs.find(request.packet.args.closedir.dir_fd);
+				if (dir != open_dirs.end()) {
+					if (dir->second.uid == request.uid) {
+						closedir(dir->second.local_dir_fd);
+						open_dirs.erase(dir);
+						response.packet.res = 0;
+					}
+				}
+				break;
+			}
+			case FSTAT: {
+				
 				break;
 			}
 			default: continue;
@@ -330,13 +378,15 @@ void handle_client(int sock, int uid) {
 			cout << "[handle_client] Read error" << endl;
 			return;
 		}
-		cout << "ok" << endl;
 		switch(packet.op) {
 			case OPEN:
 			case CLOSE:
 			case READ:
 			case WRITE:
 			case LSEEK:
+			case OPENDIR:
+			case READDIR:
+			case CLOSEDIR:
 				request_queue.push({thread_id, uid, packet});
 				Response response;
 				while(true) {
@@ -351,13 +401,10 @@ void handle_client(int sock, int uid) {
 				}
 				s_packet = response.packet;
 				break;
-			case UNLINK: break;
-			case OPENDIR: break;
-			case READDIR: break;
-			case CLOSEDIR: break;
-			case FSTAT: break;
-			case STAT: break;
-				s_packet.res = 0;
+			case UNLINK:
+			case FSTAT:
+			case STAT:
+				s_packet.res = 1;
 				break;
 			case DISCONNECT:
 				s_packet.res = 0;
@@ -372,7 +419,7 @@ void handle_client(int sock, int uid) {
 			cout << "[handle_client] Write error" << endl;
 			return;
 		}
-		cout << "ok" << endl;
 	}
+	cout << "Client disconnect" << endl;
 	return;
 }
