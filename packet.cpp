@@ -71,6 +71,7 @@ int read_stat(int sock, fd_stat *stat) {
 
 // Packeted string is uint32_t (4 bytes) + data
 int string_size(const char *str) {
+	if (str == NULL) return 4;
 	return 4 + strlen(str);
 }
 
@@ -234,6 +235,7 @@ int write_u32(int sock, uint32_t value) {
 }
 
 int write_string(int sock, const char *str) {
+	if (str == NULL) str = "";
 	uint32_t len = strlen(str);
 	// cout << "Writing " << len << " bytes as " << size << endl;
 	if (write_u32(sock, len) == -1) return -1;

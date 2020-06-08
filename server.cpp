@@ -236,6 +236,7 @@ void *spawn_fs_thread(void *args) {
 		response.packet.res = 1; // Default to error
 		switch(request.packet.op) {
 			case OPEN: {
+				cout << "Trying to open: " << request.packet.args.open.path << endl;
 				if (!file_db.has_perms(
 					request.packet.args.open.path,
 					request.uid,
@@ -251,7 +252,7 @@ void *spawn_fs_thread(void *args) {
 					request.packet.args.open.oflag,
 					request.packet.args.open.mode
 				);
-				if (local_fd < 0) continue;
+				if (local_fd < 0) break;
 				int fd = counter;
 				counter += 1;
 				if (counter == 0) counter = 1;
@@ -369,6 +370,7 @@ void *spawn_fs_thread(void *args) {
 				break;
 			}
 			case FSTAT: {
+				response.packet.ret.fstat.stat.name = NULL;
 				auto file = open_files.find(request.packet.args.fstat.fd);
 				if (file != open_files.end()) {
 					response.packet.res = 0;
@@ -377,6 +379,7 @@ void *spawn_fs_thread(void *args) {
 				break;
 			}
 			case STAT: {
+				response.packet.ret.stat.stat.name = NULL;
 				if (file_db.has_perms(request.packet.args.stat.path, request.uid, 404)) {
 					response.packet.res = 0;
 					response.packet.ret.stat.stat = file_db.get_stat(request.packet.args.stat.path);
