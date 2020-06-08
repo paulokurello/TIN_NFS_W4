@@ -23,6 +23,6 @@ int mynfs_opendir(mynfs_connection* conn, const char *path);
 const char *mynfs_readdir(mynfs_connection* conn, int dir_fd);
 int mynfs_closedir(mynfs_connection* conn, int dir_fd);
 int mynfs_fstat(mynfs_connection* conn, int fd, fd_stat *stat);
-int mynfs_stat(mynfs_connection* conn, char *path, fd_stat *stat);
+int mynfs_stat(mynfs_connection* conn, const char *path, fd_stat *stat);
 
 #endif

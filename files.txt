@@ -1,2 +1,8 @@
+/ 0 707
 test.txt 1 707
-secrets.txt 1 700
+DIR1 1 707
+DIR1/secrets.txt 1 700
+DIR1/a.txt 2 505
+DIR2 1 707
+DIR3 1 707
+DIR3/b.txt 1 707

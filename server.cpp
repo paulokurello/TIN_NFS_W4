@@ -17,6 +17,8 @@
 
 using namespace std;
 
+const char *FILE_SHARE = "./files/";
+
 void error(const char *msg, int code) {
 	perror(msg);
 	exit(code);
@@ -171,6 +173,15 @@ void *spawn_fs_thread(void *args) {
 				this->files.insert({name, {uid, perms}});
 			}
 		}
+
+		bool has_perms(string path, int c_uid, int c_perms) {
+			// TODO: Check perms better
+			for (auto [name, second] : files) {
+				auto [uid, perms] = second;
+				if (path == name && (c_uid == uid || c_uid == 0)) return true;
+			}
+			return false;
+		}
 	};
 
 	struct OpenFile {
@@ -205,8 +216,15 @@ void *spawn_fs_thread(void *args) {
 		response.packet.res = 1; // Default to error
 		switch(request.packet.op) {
 			case OPEN: {
-				// TODO: Check perms
-				string path = "files/";
+				if (!file_db.has_perms(
+					request.packet.args.open.path,
+					request.uid,
+					request.packet.args.open.mode))
+				{
+					response.packet.res = 1;
+					break;
+				}
+				string path = FILE_SHARE;
 				path += request.packet.args.open.path;
 				int local_fd = open(
 					path.c_str(),
@@ -282,8 +300,15 @@ void *spawn_fs_thread(void *args) {
 				break;
 			}
 			case OPENDIR: {
-				// TODO: Check perms
-				string path = "files/";
+				if (!file_db.has_perms(
+					request.packet.args.open.path,
+					request.uid,
+					request.packet.args.open.mode))
+				{
+					response.packet.res = 1;
+					break;
+				}
+				string path = FILE_SHARE;
 				path += request.packet.args.opendir.path;
 				DIR *local_dir_fd = opendir(path.c_str());
 				if (local_dir_fd == nullptr) continue;

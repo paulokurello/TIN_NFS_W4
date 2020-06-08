@@ -23,5 +23,8 @@ target_link_libraries(upload client_lib)
 add_executable(download download.cpp)
 target_link_libraries(download client_lib)
 
+add_executable(tree tree.cpp)
+target_link_libraries(tree client_lib)
+
 add_executable(shell shell.cpp)
 target_link_libraries(shell client_lib)

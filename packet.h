@@ -37,6 +37,8 @@ enum oflags {
 	OF_LEGAL = OF_RDONLY | OF_WRONLY | OF_RDWR | OF_APPEND | OF_CREAT | OF_EXCL | OF_TRUNC
 };
 
+const int IS_DIR = 01000;
+
 struct fd_stat {
     char *name;
     uint32_t mode;

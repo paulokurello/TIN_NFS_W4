@@ -22,6 +22,7 @@ int main(int argc, const char **argv) {
 	int remote;
 	try_op((remote = mynfs_open(conn, argv[5], OF_WRONLY | OF_CREAT | OF_TRUNC, 0707)), "");
 	char buf[256] = {0};
+	try_op(mynfs_lseek(conn, remote, 0, SEEK_SET), "");
 	int n;
 	while((n = read(local, buf, sizeof(buf))) > 0) {
 		try_op(mynfs_write(conn, remote, buf, n), "");

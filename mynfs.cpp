@@ -332,7 +332,7 @@ int mynfs_closedir(mynfs_connection* conn, int fd) {
 	return OK;
 }
 
-int mynfs_fstat(mynfs_connection* conn, int fd) {
+int mynfs_fstat(mynfs_connection* conn, int fd, fd_stat* stat) {
     
 	client_packet packet;
 	packet.op = FSTAT;
@@ -354,11 +354,12 @@ int mynfs_fstat(mynfs_connection* conn, int fd) {
 		mynfs_error = UNKNOWN;
 		return ERROR;
 	}
+	*stat = recv_packet.ret.fstat.stat;
 
 	return OK;
 }
 
-int mynfs_stat(mynfs_connection* conn, const char *path) {
+int mynfs_stat(mynfs_connection* conn, const char *path, fd_stat* stat) {
     
 	client_packet packet;
 	packet.op = STAT;
@@ -380,6 +381,7 @@ int mynfs_stat(mynfs_connection* conn, const char *path) {
 		mynfs_error = UNKNOWN;
 		return ERROR;
 	}
+	*stat = recv_packet.ret.stat.stat;
 
 	return OK;
 }
