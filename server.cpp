@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <netinet/ip.h>
 #include <arpa/inet.h>
 #include <signal.h>
@@ -182,9 +183,28 @@ void *spawn_fs_thread(void *args) {
 			}
 			return false;
 		}
+
+		fd_stat get_stat(string path) {
+			fd_stat fd_stat;
+			auto [name, second] = *files.find(path);
+			auto [uid, perms] = second;
+			fd_stat.name = (char *) name.c_str();
+			fd_stat.uid = uid;
+			fd_stat.mode = perms;
+			if ((perms & IS_DIR) != 0) fd_stat.size = 0;
+			else {
+				string file_path = FILE_SHARE;
+				file_path += path;
+				struct stat file_stat;
+				stat(file_path.c_str(), &file_stat);
+				fd_stat.size = file_stat.st_size;
+			}
+			return fd_stat;
+		}
 	};
 
 	struct OpenFile {
+		string path;
 		int local_fd;
 		int uid;
 	};
@@ -235,7 +255,7 @@ void *spawn_fs_thread(void *args) {
 				int fd = counter;
 				counter += 1;
 				if (counter == 0) counter = 1;
-				open_files.insert({fd, {local_fd, request.uid}});
+				open_files.insert({fd, {request.packet.args.open.path, local_fd, request.uid}});
 				response.packet.res = 0;
 				response.packet.ret.open.fd = fd;
 				break;
@@ -342,8 +362,25 @@ void *spawn_fs_thread(void *args) {
 				}
 				break;
 			}
+			case UNLINK: {
+				if (file_db.has_perms(request.packet.args.unlink.path, request.uid, 202)) {
+					file_db.files.erase(request.packet.args.unlink.path);
+				}
+				break;
+			}
 			case FSTAT: {
-				
+				auto file = open_files.find(request.packet.args.fstat.fd);
+				if (file != open_files.end()) {
+					response.packet.res = 0;
+					response.packet.ret.fstat.stat = file_db.get_stat(file->second.path);
+				}
+				break;
+			}
+			case STAT: {
+				if (file_db.has_perms(request.packet.args.stat.path, request.uid, 404)) {
+					response.packet.res = 0;
+					response.packet.ret.stat.stat = file_db.get_stat(request.packet.args.stat.path);
+				}
 				break;
 			}
 			default: continue;
@@ -409,9 +446,12 @@ void handle_client(int sock, int uid) {
 			case READ:
 			case WRITE:
 			case LSEEK:
+			case UNLINK:
 			case OPENDIR:
 			case READDIR:
 			case CLOSEDIR:
+			case FSTAT:
+			case STAT:
 				request_queue.push({thread_id, uid, packet});
 				Response response;
 				while(true) {
@@ -425,11 +465,6 @@ void handle_client(int sock, int uid) {
 					pthread_yield();
 				}
 				s_packet = response.packet;
-				break;
-			case UNLINK:
-			case FSTAT:
-			case STAT:
-				s_packet.res = 1;
 				break;
 			case DISCONNECT:
 				s_packet.res = 0;
