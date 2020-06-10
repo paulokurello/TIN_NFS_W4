@@ -73,9 +73,9 @@ int read_u32(int sock, uint32_t *value) {
 
 int read_string(int sock, char **str) {
 	uint32_t size;
-	if (read_u32(sock, &size) == -1) return -1;
+	try_op(read_u32(sock, &size), "");
 	*str = (char *) malloc(size + 1);
-	if (read_to_end(sock, *str, size) == -1) return -1;
+	try_op(read_to_end(sock, *str, size), "");
 	(*str)[size] = 0;
 	return 0;
 }

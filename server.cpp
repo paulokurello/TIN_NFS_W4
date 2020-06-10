@@ -28,6 +28,16 @@ void error(const char *msg, int code) {
 	exit(code);
 }
 
+char *copy_str(const char *str) {
+	if (str == nullptr) return nullptr;
+	unsigned size = strlen(str);
+	char *ret = (char *) malloc(size + 1);
+	for (unsigned i = 0; i < size; i++)
+		ret[i] = str[i];
+	ret[size] = 0;
+	return ret;
+}
+
 struct User {
 	string name;
 	string password;
@@ -198,9 +208,11 @@ void *spawn_fs_thread(void *args) {
 
 		optional<fd_stat> get_stat(string path) {
 			fd_stat fd_stat;
-			auto [name, second] = *files.find(path);
+			auto find = files.find(path);
+			if (find == files.end()) return nullopt;
+			auto [name, second] = *find;
 			auto [uid, perms] = second;
-			fd_stat.name = (char *) name.c_str();
+			fd_stat.name = copy_str(name.c_str());
 			fd_stat.uid = uid;
 			fd_stat.mode = perms;
 			if ((perms & IS_DIR) != 0) fd_stat.size = 0;
@@ -371,11 +383,7 @@ void *spawn_fs_thread(void *args) {
 						char *name = nullptr;
 						if (entry) {
 							cout << "Entry: " << entry->d_name << endl;
-							name = (char *) malloc(strlen(entry->d_name) + 1);
-							cout << "Readdir entry: " << entry->d_name << endl;
-							for (unsigned int i = 0; i < strlen(entry->d_name); i++)
-								name[i] = entry->d_name[i];
-							name[strlen(entry->d_name)] = 0;
+							name = copy_str(entry->d_name);
 						}
 
 						response.packet.res = 0;
