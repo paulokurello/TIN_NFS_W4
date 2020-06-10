@@ -5,7 +5,7 @@ project(NFS_W4)
 set(CMAKE_CXX_COMPILER clang++)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
-set(CMAKE_CXX_FLAGS "-O1 -ggdb -Wall -Wextra -Wno-unused-parameter -Werror -Wpedantic -pthread")
+set(CMAKE_CXX_FLAGS "-O0 -fsanitize=undefined -ggdb -Wall -Wextra -Wno-unused-parameter -Werror -Wpedantic -pthread")
 
 add_executable(server server.cpp)
 

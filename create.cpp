@@ -24,7 +24,7 @@ int main(int argc, const char *argv[]) {
 	try_op(mynfs_connect(&conn, argv[1], argv[2], argv[3]), "connect failed");
 	int fd;
 	int flags = O_CREAT | (mkdir ? O_DIRECTORY : 0);
-	try_op((fd = mynfs_open(conn, argv[mkdir ? 5 : 4], flags, 0)), "open failed");
+	try_op((fd = mynfs_open(conn, argv[mkdir ? 5 : 4], flags, 0707)), "open failed");
 	try_op(mynfs_close(conn, fd), "close failed");
 	try_op(mynfs_disconnect(conn), "disconnect failed");
 	cout << "ok" << endl;

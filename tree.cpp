@@ -43,8 +43,9 @@ int stat_dir(mynfs_connection *conn, string path, int level) {
 int main(int argc, const char **argv) {
 	if (argc < 4) return -1;
 	mynfs_connection *conn;
+	cout << "Connecting..." << endl;
 	try_op(mynfs_connect(&conn, argv[1], argv[2], argv[3]), "connect failed");
-	try_op(stat_dir(conn, "/", 0), "stat_dir failed");
+	try_op(stat_dir(conn, "DIR1", 1), "stat_dir failed");
 	try_op(mynfs_disconnect(conn), "disconnect failed");
 	cout << "ok" << endl;
 }

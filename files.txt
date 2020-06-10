@@ -1,8 +1,8 @@
-/ 0 01707
-test.txt 1 0707
-DIR1 1 01707
-DIR1/secrets.txt 1 0700
 DIR1/a.txt 2 0505
+DIR1 1 01707
 DIR2 1 01707
 DIR3 1 01707
+test.txt 1 0707
+/ 0 01707
 DIR3/b.txt 1 0707
+DIR1/secrets.txt 1 0700

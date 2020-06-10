@@ -19,7 +19,7 @@
 
 using namespace std;
 
-const char *FILE_SHARE = "files/";
+const char *FILE_SHARE = "NFS/";
 const char *FILE_DB = "files.txt";
 const char *USERS_DB = "users.txt";
 
@@ -170,10 +170,11 @@ void *spawn_fs_thread(void *args) {
 			while(!file.eof()) {
 				string name;
 				file >> name;
+				if (name.empty()) continue;
 				int uid;
 				file >> uid;
 				int perms;
-				file >> perms;
+				file >> oct >> perms >> dec;
 				this->files.insert({name, {uid, perms}});
 			}
 		}
@@ -267,6 +268,7 @@ void *spawn_fs_thread(void *args) {
 				int fd = counter;
 				counter += 1;
 				if (counter == 0) counter = 1;
+				file_db.files.insert({request.packet.args.open.path, {request.uid, request.packet.args.open.mode}});
 				open_files.insert({fd, {request.packet.args.open.path, local_fd, request.uid}});
 				response.packet.res = 0;
 				response.packet.ret.open.fd = fd;
@@ -345,7 +347,7 @@ void *spawn_fs_thread(void *args) {
 				string path = FILE_SHARE;
 				path += request.packet.args.opendir.path;
 				DIR *local_dir_fd = opendir(path.c_str());
-				if (local_dir_fd == nullptr) continue;
+				if (local_dir_fd == nullptr) break;
 				int dir_fd = dir_counter;
 				dir_counter += 1;
 				if (dir_counter == 0) dir_counter = 1;
@@ -355,12 +357,29 @@ void *spawn_fs_thread(void *args) {
 				break;
 			}
 			case READDIR: {
+				cout << "Trying readdir" << endl;
 				auto dir = open_dirs.find(request.packet.args.readdir.dir_fd);
 				if (dir != open_dirs.end()) {
 					if (dir->second.uid == request.uid) {
+						cout << "Trying readdir" << endl;
 						auto entry = readdir(dir->second.local_dir_fd);
+						// Readdir error
+						if (entry == nullptr && errno != 0) {
+							cout << "Shiz whack, yo!" << endl;
+							break;
+						}
+						char *name = nullptr;
+						if (entry) {
+							cout << "Entry: " << entry->d_name << endl;
+							name = (char *) malloc(strlen(entry->d_name) + 1);
+							cout << "Readdir entry: " << entry->d_name << endl;
+							for (unsigned int i = 0; i < strlen(entry->d_name); i++)
+								name[i] = entry->d_name[i];
+							name[strlen(entry->d_name)] = 0;
+						}
+
 						response.packet.res = 0;
-						response.packet.ret.readdir.name = entry ? entry->d_name : nullptr;
+						response.packet.ret.readdir.name = name;
 					}
 				}
 				break;
@@ -379,6 +398,10 @@ void *spawn_fs_thread(void *args) {
 			case UNLINK: {
 				if (file_db.has_perms(request.packet.args.unlink.path, request.uid, 202)) {
 					file_db.files.erase(request.packet.args.unlink.path);
+					string name = FILE_SHARE;
+					name += request.packet.args.unlink.path;
+					remove(name.c_str());
+					file_db.save(FILE_DB);
 				}
 				break;
 			}
@@ -464,6 +487,7 @@ void handle_client(int sock, int uid) {
 			cout << "[handle_client] Read error" << endl;
 			return;
 		}
+		cout << "got " << op_name(packet.op) << endl;
 		switch(packet.op) {
 			case OPEN:
 			case CLOSE:
@@ -498,7 +522,7 @@ void handle_client(int sock, int uid) {
 				cout << "[handle_client] Invalid op" << (int) packet.op << endl;
 				return;
 		}
-		cout << "Sending " << op_name(packet.op) << "... ";
+		cout << "Sending " << op_name(packet.op) << "... " << endl;
 		if (write_server_packet(sock, &s_packet, packet.op) == -1) {
 			cout << "[handle_client] Write error" << endl;
 			return;

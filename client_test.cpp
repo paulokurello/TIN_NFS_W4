@@ -22,7 +22,7 @@ int main() {
 		if ((name = mynfs_readdir(conn, dir_fd)) == nullptr) {
 			break;
 		}
-		cout << name << endl;
+		cout << "Dir: " << name << endl;
 	}
 	if (mynfs_closedir(conn, dir_fd) == -1) {
 		cout << "Got mynfs error on closedir: " << mynfs_error << endl;
