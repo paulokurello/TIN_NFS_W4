@@ -16,6 +16,25 @@ using namespace std;
 
 //! Packet marshalling
 
+const char *op_name(int op) {
+	switch(op) {
+		case CONNECT: return "connect";
+		case OPEN: return "open";
+		case CLOSE: return "close";
+		case READ: return "read";
+		case WRITE: return "write";
+		case LSEEK: return "lseek";
+		case UNLINK: return "unlink";
+		case OPENDIR: return "opendir";
+		case READDIR: return "readdir";
+		case CLOSEDIR: return "closedir";
+		case FSTAT: return "fstat";
+		case STAT: return "stat";
+		case DISCONNECT: return "disconnect";
+		default: return "unknown";
+	}
+}
+
 int read_to_end(int sock, char *buf, int size) {
 	int left = size;
 	while (left > 0) {
@@ -39,7 +58,7 @@ int write_all(int sock, const char *buf, int size) {
 		if (n < 0) {
 			cout << "write_all error: " << strerror(errno) << endl;
 			return -1;
-		} 
+		}
 		left -= n;
 		buf += n;
 	}
@@ -168,7 +187,7 @@ uint32_t server_packet_size(const server_packet *packet, int op) {
 		case OPEN: return 1 + 4;
 		case CLOSE: return 1;
 		case READ: return 1 + 4 + packet->ret.read.size;
-		case WRITE: return 1;
+		case WRITE: return 1 + 4;
 		case LSEEK: return 1 + 4;
 		case UNLINK: return 1;
 		case OPENDIR: return 1 + 4;
@@ -200,7 +219,9 @@ int read_server_packet(int sock, server_packet *packet, int op) {
 			if (packet->ret.read.data == nullptr) return -1;
 			try_op(read_to_end(sock, (char *) packet->ret.read.data, packet->ret.read.size), "Reading read data error");
 			break;
-		case WRITE: break;
+		case WRITE:
+			try_op(read_u32(sock, &packet->ret.write.size), "Reading write size error");
+			break;
 		case LSEEK:
 			try_op(read_u32(sock, &packet->ret.lseek.offset), "Reading lseek offset error");
 			break;
@@ -327,7 +348,9 @@ int write_server_packet(int sock, const server_packet *packet, int op) {
 			try_op(write_u32(sock, packet->ret.read.size), "Writing read size error");
 			try_op(write_all(sock, (const char *) packet->ret.read.data, packet->ret.read.size), "Writing read data error");
 			break;
-		case WRITE: break;
+		case WRITE:
+			try_op(write_u32(sock, packet->ret.write.size), "Writing write size error");
+			break;
 		case LSEEK: 
 			try_op(write_u32(sock, packet->ret.lseek.offset), "Writing lseek offset error");
 			break;

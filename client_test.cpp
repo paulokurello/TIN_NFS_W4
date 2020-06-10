@@ -4,7 +4,7 @@
 
 using namespace std;
 
-int main(int argc, char *argv[]) {
+int main() {
 	mynfs_connection *conn;
 	cout << "Connecting" << endl;
 	if (mynfs_connect(&conn, "127.0.0.1", "admexter", "hunter51") == -1) {

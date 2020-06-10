@@ -110,7 +110,9 @@ struct server_packet {
 			uint32_t size;
 			void *data;
 		} read;
-		struct {} write;
+		struct {
+			uint32_t size;
+		} write;
 		struct {
 			uint32_t offset;
 		} lseek;

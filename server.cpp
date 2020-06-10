@@ -1,5 +1,6 @@
 #include <iostream>
 #include <fstream>
+#include <optional>
 #include <vector>
 #include <unordered_map>
 #include <sys/types.h>
@@ -18,7 +19,9 @@
 
 using namespace std;
 
-const char *FILE_SHARE = "./files/";
+const char *FILE_SHARE = "files/";
+const char *FILE_DB = "files.txt";
+const char *USERS_DB = "users.txt";
 
 void error(const char *msg, int code) {
 	perror(msg);
@@ -114,7 +117,7 @@ int main(int argc, char* argv[]) {
 	// Handle Ctrl-C to properly stop server
 	install_sighandler();
 
-	Users users("users.txt");
+	Users users(USERS_DB);
 
 	pthread_t fs;
 	if (pthread_create(&fs, nullptr, spawn_fs_thread, nullptr) == -1)
@@ -148,7 +151,7 @@ int main(int argc, char* argv[]) {
 
 		pthread_t thread;
 		int args[2] = {peer_sock, user_id};
-		if (pthread_create(&thread, nullptr, spawn_client_thread, (void *) &args) == -1) {
+		if (pthread_create(&thread, nullptr, spawn_client_thread, (void *) args) == -1) {
 			cout << "Error on handling client" << endl;
 		}
 	}
@@ -175,6 +178,14 @@ void *spawn_fs_thread(void *args) {
 			}
 		}
 
+		void save(const char *file_path) {
+			ofstream file{file_path};
+			for (auto [name, second] : files) {
+				auto [uid, perms] = second;
+				file << name << " " << uid << " 0" << oct << perms << dec << endl;
+			}
+		}
+
 		bool has_perms(string path, int c_uid, int c_perms) {
 			// TODO: Check perms better
 			for (auto [name, second] : files) {
@@ -184,7 +195,7 @@ void *spawn_fs_thread(void *args) {
 			return false;
 		}
 
-		fd_stat get_stat(string path) {
+		optional<fd_stat> get_stat(string path) {
 			fd_stat fd_stat;
 			auto [name, second] = *files.find(path);
 			auto [uid, perms] = second;
@@ -196,7 +207,7 @@ void *spawn_fs_thread(void *args) {
 				string file_path = FILE_SHARE;
 				file_path += path;
 				struct stat file_stat;
-				stat(file_path.c_str(), &file_stat);
+				if (stat(file_path.c_str(), &file_stat) != 0) return nullopt;
 				fd_stat.size = file_stat.st_size;
 			}
 			return fd_stat;
@@ -214,7 +225,7 @@ void *spawn_fs_thread(void *args) {
 		int uid;
 	};
 
-	FileDb file_db("files.txt");
+	FileDb file_db(FILE_DB);
 	// remote_fd => (local_fd, uid)
 	unordered_map<int, OpenFile> open_files{};
 	unsigned int counter = 1;
@@ -240,7 +251,7 @@ void *spawn_fs_thread(void *args) {
 				if (!file_db.has_perms(
 					request.packet.args.open.path,
 					request.uid,
-					request.packet.args.open.mode))
+					request.packet.args.open.mode) && !(request.packet.args.open.oflag & O_CREAT))
 				{
 					response.packet.res = 1;
 					break;
@@ -259,6 +270,7 @@ void *spawn_fs_thread(void *args) {
 				open_files.insert({fd, {request.packet.args.open.path, local_fd, request.uid}});
 				response.packet.res = 0;
 				response.packet.ret.open.fd = fd;
+				file_db.save(FILE_DB);
 				break;
 			}
 			case CLOSE: {
@@ -282,7 +294,7 @@ void *spawn_fs_thread(void *args) {
 							response.packet.res = 0;
 							response.packet.ret.read.size = n;
 							response.packet.ret.read.data = buf;
-						} 
+						}
 					}
 				}
 				break;
@@ -291,13 +303,14 @@ void *spawn_fs_thread(void *args) {
 				auto file = open_files.find(request.packet.args.write.fd);
 				if (file != open_files.end()) {
 					if (file->second.uid == request.uid) {
-						int n = write_all(
+						int n = write(
 							file->second.local_fd,
 							(const char*) request.packet.args.write.data,
 							request.packet.args.write.size
 						);
 						if (n >= 0) {
 							response.packet.res = 0;
+							response.packet.ret.write.size = n;
 						} 
 					}
 				}
@@ -373,16 +386,24 @@ void *spawn_fs_thread(void *args) {
 				response.packet.ret.fstat.stat.name = NULL;
 				auto file = open_files.find(request.packet.args.fstat.fd);
 				if (file != open_files.end()) {
-					response.packet.res = 0;
-					response.packet.ret.fstat.stat = file_db.get_stat(file->second.path);
+					if (file->second.uid == request.uid) {
+						auto stat = file_db.get_stat(file->second.path);
+						if (stat) {
+							response.packet.res = 0;
+							response.packet.ret.fstat.stat = *stat;
+						}
+					}
 				}
 				break;
 			}
 			case STAT: {
 				response.packet.ret.stat.stat.name = NULL;
 				if (file_db.has_perms(request.packet.args.stat.path, request.uid, 404)) {
-					response.packet.res = 0;
-					response.packet.ret.stat.stat = file_db.get_stat(request.packet.args.stat.path);
+					auto stat = file_db.get_stat(request.packet.args.stat.path);
+					if (stat) {
+						response.packet.res = 0;
+						response.packet.ret.fstat.stat = *stat;
+					}
 				}
 				break;
 			}
@@ -477,7 +498,7 @@ void handle_client(int sock, int uid) {
 				cout << "[handle_client] Invalid op" << (int) packet.op << endl;
 				return;
 		}
-		cout << "Sending " << (int) packet.op << "... ";
+		cout << "Sending " << op_name(packet.op) << "... ";
 		if (write_server_packet(sock, &s_packet, packet.op) == -1) {
 			cout << "[handle_client] Write error" << endl;
 			return;
