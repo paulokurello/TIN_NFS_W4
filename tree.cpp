@@ -48,7 +48,24 @@ int main(int argc, const char **argv) {
 	mynfs_connection *conn;
 	cout << "Connecting..." << endl;
 	try_op(mynfs_connect(&conn, argv[1], argv[2], argv[3]), "connect failed");
-	try_op(stat_dir(conn, "/", 0), "stat_dir failed");
+
+	// how about not
+	// try_op(stat_dir(conn, "/", 0), "stat_dir failed");
+	
+	int fd;
+	try_op((fd = mynfs_open(conn, "tree", O_RDONLY, 0)), "open failed");
+
+	int n = 1;
+	while (n != 0) {
+		char buf[256] = {0};
+		try_op((n = mynfs_read(conn, fd, buf, sizeof(buf))), "read failed");
+		for (int i = 0; i < n; i++) {
+			cout << buf[i];
+		}
+	}
+	cout << endl;
+
+	try_op(mynfs_close(conn, fd), "close failed");
 	try_op(mynfs_disconnect(conn), "disconnect failed");
 	cout << "ok" << endl;
 }

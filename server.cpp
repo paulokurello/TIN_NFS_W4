@@ -1,8 +1,10 @@
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <optional>
 #include <vector>
 #include <unordered_map>
+#include <map>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -173,7 +175,7 @@ int main(int argc, char* argv[]) {
 void *spawn_fs_thread(void *args) {
 	struct FileDb {
 		// name => (uid, perms)
-		unordered_map<string, pair<int, int>> files;
+		map<string, pair<int, int>> files;
 
 		FileDb(const char *file_path) {
 			ifstream file{file_path};
@@ -193,8 +195,20 @@ void *spawn_fs_thread(void *args) {
 			ofstream file{file_path};
 			for (auto [name, second] : files) {
 				auto [uid, perms] = second;
+				if (name == string("tree")) continue;
 				file << name << " " << uid << " 0" << oct << perms << dec << endl;
 			}
+		}
+
+		void gen_tree(string *tree) {
+			ostringstream s;
+			s << "        ";
+			for (auto file : files) {
+				auto name = file.first;
+				if (name == string("tree")) continue;
+				s << name << endl;
+			}
+			*tree = s.str();
 		}
 
 		bool has_perms(string path, int c_uid, int c_perms) {
@@ -241,9 +255,12 @@ void *spawn_fs_thread(void *args) {
 	FileDb file_db(FILE_DB);
 	// remote_fd => (local_fd, uid)
 	unordered_map<int, OpenFile> open_files{};
-	unsigned int counter = 1;
+	unsigned int counter = 2;
 	unordered_map<int, OpenDir> open_dirs{};
 	unsigned int dir_counter = 1;
+
+	string tree = "";
+	file_db.gen_tree(&tree);
 
 	while(true) {
 		Request request;
@@ -261,30 +278,37 @@ void *spawn_fs_thread(void *args) {
 		switch(request.packet.op) {
 			case OPEN: {
 				cout << "Trying to open: " << request.packet.args.open.path << endl;
-				if (!file_db.has_perms(
-					request.packet.args.open.path,
-					request.uid,
-					request.packet.args.open.mode) && !(request.packet.args.open.oflag & O_CREAT))
-				{
-					response.packet.res = 1;
-					break;
+				int local_fd;
+				if (request.packet.args.open.path == string("tree")) {
+					local_fd = 0;
+				} else {
+					if (!file_db.has_perms(
+						request.packet.args.open.path,
+						request.uid,
+						request.packet.args.open.mode)
+						&& !(request.packet.args.open.oflag & O_CREAT))
+					{
+						break;
+					}
+					string path = FILE_SHARE;
+					path += request.packet.args.open.path;
+					local_fd = open(
+						path.c_str(),
+						request.packet.args.open.oflag,
+						request.packet.args.open.mode
+					);
+					if (local_fd < 0) break;
 				}
-				string path = FILE_SHARE;
-				path += request.packet.args.open.path;
-				int local_fd = open(
-					path.c_str(),
-					request.packet.args.open.oflag,
-					request.packet.args.open.mode
-				);
-				if (local_fd < 0) break;
 				int fd = counter;
-				counter += 1;
-				if (counter == 0) counter = 1;
+				if (counter == 0) counter = 2;
+				else counter += 1;
+
 				file_db.files.insert({request.packet.args.open.path, {request.uid, request.packet.args.open.mode}});
 				open_files.insert({fd, {request.packet.args.open.path, local_fd, request.uid}});
 				response.packet.res = 0;
 				response.packet.ret.open.fd = fd;
 				file_db.save(FILE_DB);
+				file_db.gen_tree(&tree);
 				break;
 			}
 			case CLOSE: {
@@ -303,7 +327,18 @@ void *spawn_fs_thread(void *args) {
 				if (file != open_files.end()) {
 					if (file->second.uid == request.uid) {
 						void *buf = malloc(request.packet.args.read.size);
-						int n = read(file->second.local_fd, buf, request.packet.args.read.size);
+						int n;
+						if (file->second.path == string("tree")) {
+							string_view view = tree.substr(file->second.local_fd);
+							n = min(request.packet.args.read.size, (unsigned) view.size());
+							char *c_buf = (char *) buf;
+							for (int i = 0; i < n; i++) {
+								c_buf[i] = view[i];
+							}
+							file->second.local_fd += n;
+						} else {
+							n = read(file->second.local_fd, buf, request.packet.args.read.size);
+						}
 						if (n >= 0) {
 							response.packet.res = 0;
 							response.packet.ret.read.size = n;
@@ -342,7 +377,7 @@ void *spawn_fs_thread(void *args) {
 						if (n >= 0) {
 							response.packet.res = 0;
 							response.packet.ret.lseek.offset = n;
-						} 
+						}
 					}
 				}
 				break;
@@ -410,6 +445,7 @@ void *spawn_fs_thread(void *args) {
 					name += request.packet.args.unlink.path;
 					remove(name.c_str());
 					file_db.save(FILE_DB);
+					file_db.gen_tree(&tree);
 				}
 				break;
 			}
