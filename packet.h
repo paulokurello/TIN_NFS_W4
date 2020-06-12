@@ -69,7 +69,7 @@ struct client_packet {
 		struct {
 			uint32_t fd;
 			uint32_t size;
-			void *data;
+			const void *data;
 		} write;
 		struct {
 			uint32_t fd;

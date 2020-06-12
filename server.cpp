@@ -154,7 +154,7 @@ int main(int argc, char* argv[]) {
 		
 		int user_id = check_client_pass(peer_sock, &users);;
 		if (user_id == -1) {
-			cout << "Error on checking password" << endl;
+			cout << "wrong password" << endl;
 			close(peer_sock);
 			continue;
 		} else {
